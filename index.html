@@ -1,1868 +1,386 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;overflow:hidden}body{background:#000}canvas{display:block}#覆{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:monospace;color:#0ff;font-size:10px;line-height:1.2;text-shadow:0 0 5px #0ff;padding:5px;z-index:999;columns:4;column-gap:10px}#覆 div{break-inside:avoid;margin:1px 0;opacity:0.8}</style></head><body><div id="覆"></div><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><script>
-console.log("[v0] 初始化开始");
-const φ=1.618033988749895,τ=6.283185307179586,π=Math.PI,黄=137.5077640500378*π/180;
-let 场,相,渲,螺=[],粒=[],鼠X=0,鼠Y=0,时=0,覆,速X=0,速Y=0;
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三维交互式图形展示 - 3D Interactive Graphics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff88;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #00ff88;
+            font-size: 14px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        #info-panel h1 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        #info-panel p {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .coordinate {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: 2px solid #00d4ff;
+            color: #00d4ff;
+            font-size: 12px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.4);
+        }
+        
+        #fps-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #ffaa00;
+            padding: 10px 20px;
+            border-radius: 5px;
+            border: 2px solid #ffaa00;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="info-panel">
+        <h1>🌌 三维空间交互系统</h1>
+        <p>📍 鼠标位置: <span class="coordinate" id="mouse-x">0</span>, <span class="coordinate" id="mouse-y">0</span></p>
+        <p>🎯 相机角度: <span id="camera-angle">0°</span></p>
+        <p>🔄 旋转速度: <span id="rotation-speed">1.0x</span></p>
+        <p>✨ 粒子数量: <span id="particle-count">5000</span></p>
+        <p>🎨 活跃对象: <span id="active-objects">12</span></p>
+    </div>
+    
+    <div id="controls">
+        💡 移动鼠标控制相机 | 🖱️ 点击改变颜色 | ⚡ 滚轮缩放视图
+    </div>
+    
+    <div id="fps-counter">
+        FPS: <span id="fps">60</span>
+    </div>
 
-function 初(){
-console.log("[v0] 创建场景");
-场=new THREE.Scene();
-场.fog=new THREE.FogExp2(0x000000,0.0005);
-相=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,5000);
-相.position.z=300;
-渲=new THREE.WebGLRenderer({antialias:true});
-渲.setSize(innerWidth,innerHeight);
-渲.setClearColor(0x000000);
-document.body.appendChild(渲.domElement);
-覆=document.getElementById('覆');
-
-场.add(new THREE.AmbientLight(0x404040,1));
-for(let i=0;i<6;i++){
-let 光=new THREE.PointLight(new THREE.Color().setHSL(i/6,1,0.5),2,800);
-光.position.set(Math.cos(i*τ/6)*300,Math.sin(i*τ/6)*300,Math.cos(i*τ/12)*200);
-场.add(光);
-}
-
-console.log("[v0] 生成螺旋");
-for(let 层=0;层<3;层++){
-let 点=[];
-for(let i=0;i<1500;i++){
-let θ=i*黄,r=Math.sqrt(i)*φ*0.4,x=r*Math.cos(θ),y=r*Math.sin(θ),z=i*0.12-200;
-点.push(new THREE.Vector3(x,y,z));
-}
-let 曲=new THREE.CatmullRomCurve3(点);
-let 管=new THREE.TubeGeometry(曲,点.length*2,0.5+层*0.2,6,false);
-let 材=new THREE.MeshPhongMaterial({color:new THREE.Color().setHSL(层/3,1,0.5),emissive:new THREE.Color().setHSL(层/3,1,0.3),transparent:true,opacity:0.8,wireframe:层%2===1});
-let 网=new THREE.Mesh(管,材);
-网.userData={层:层};
-场.add(网);
-螺.push(网);
-
-for(let i=0;i<点.length;i+=8){
-let 几=new THREE.OctahedronGeometry(1+Math.random(),0);
-let 材2=new THREE.MeshPhongMaterial({color:new THREE.Color().setHSL((i/点.length+层/3)%1,1,0.6),emissive:new THREE.Color().setHSL((i/点.length+层/3)%1,1,0.4)});
-let 网2=new THREE.Mesh(几,材2);
-网2.position.copy(点[i]);
-网2.userData={原:点[i].clone(),索:i,层:层};
-场.add(网2);
-螺.push(网2);
-}
-}
-
-console.log("[v0] 生成粒子");
-for(let 系=0;系<8;系++){
-let 几=new THREE.BufferGeometry();
-let 位=new Float32Array(600*3);
-let 色=new Float32Array(600*3);
-for(let i=0;i<600;i++){
-let θ=Math.random()*τ,φ角=Math.random()*π,r=Math.random()*400+50;
-位[i*3]=r*Math.sin(φ角)*Math.cos(θ);
-位[i*3+1]=r*Math.sin(φ角)*Math.sin(θ);
-位[i*3+2]=r*Math.cos(φ角);
-let c=new THREE.Color().setHSL((系/8+Math.random()*0.1)%1,1,0.6);
-色[i*3]=c.r;色[i*3+1]=c.g;色[i*3+2]=c.b;
-}
-几.setAttribute('position',new THREE.BufferAttribute(位,3));
-几.setAttribute('color',new THREE.BufferAttribute(色,3));
-let 材=new THREE.PointsMaterial({size:2,vertexColors:true,transparent:true,opacity:0.7,blending:THREE.AdditiveBlending});
-let 点=new THREE.Points(几,材);
-点.userData={系:系,速:0.3+Math.random()};
-场.add(点);
-粒.push(点);
-}
-
-document.addEventListener('mousemove',e=>{
-let 新X=(e.clientX/innerWidth)*2-1;
-let 新Y=-(e.clientY/innerHeight)*2+1;
-速X=(新X-鼠X)*10;
-速Y=(新Y-鼠Y)*10;
-鼠X=新X;鼠Y=新Y;
-});
-
-window.addEventListener('resize',()=>{
-相.aspect=innerWidth/innerHeight;
-相.updateProjectionMatrix();
-渲.setSize(innerWidth,innerHeight);
-});
-
-console.log("[v0] 初始化完成");
-动();
-}
-
-function 动(){
-requestAnimationFrame(动);
-时+=0.016;
-
-螺.forEach((obj,i)=>{
-if(obj.geometry.type==='TubeGeometry'){
-obj.rotation.z+=0.001*(obj.userData.层+1);
-obj.rotation.y+=0.002*(obj.userData.层+1);
-}else{
-let 原=obj.userData.原;
-let 波=Math.sin(时*2+obj.userData.索*0.1)*5;
-obj.position.x=原.x+Math.cos(时+obj.userData.索)*波*(1+Math.abs(鼠X)*2);
-obj.position.y=原.y+Math.sin(时+obj.userData.索)*波*(1+Math.abs(鼠Y)*2);
-obj.rotation.x+=0.02*(1+Math.abs(鼠X));
-obj.rotation.y+=0.03*(1+Math.abs(鼠Y));
-}
-});
-
-粒.forEach((p,i)=>{
-p.rotation.y+=p.userData.速*0.01*(1+Math.abs(鼠X)*3);
-p.rotation.x+=p.userData.速*0.005*(1+Math.abs(鼠Y)*3);
-let 位=p.geometry.attributes.position.array;
-for(let j=0;j<位.length;j+=3){
-位[j]+=Math.sin(时+j)*0.5*Math.abs(鼠X);
-位[j+1]+=Math.cos(时+j)*0.5*Math.abs(鼠Y);
-位[j+2]+=Math.sin(时*0.5+j)*0.3*(Math.abs(鼠X)+Math.abs(鼠Y));
-}
-p.geometry.attributes.position.needsUpdate=true;
-});
-
-相.position.x+=(鼠X*100-相.position.x)*0.05;
-相.position.y+=(鼠Y*100-相.position.y)*0.05;
-相.lookAt(0,0,0);
-
-场.rotation.y+=速X*0.001;
-场.rotation.x+=速Y*0.001;
-
-更新方程();
-渲.render(场,相);
-}
-
-function 更新方程(){
-let 斐=计算斐波那契(Math.floor(Math.abs(鼠X*40)+Math.abs(鼠Y*40)));
-let 黄金幂=Math.pow(φ,Math.abs(鼠X*6+鼠Y*6));
-let 复模=Math.sqrt(鼠X*鼠X+鼠Y*鼠Y);
-let 复角=Math.atan2(鼠Y,鼠X);
-let 曼德=曼德布洛特(鼠X*2.5,鼠Y*2.5,80);
-let 傅=0;for(let n=1;n<=30;n++)傅+=Math.cos(n*时)/n+Math.sin(n*时)/(n*n);
-let 波=Math.sin(鼠X*15+时)*Math.cos(鼠Y*15+时);
-let 能=-(鼠X*鼠X+鼠Y*鼠Y)*0.8+Math.abs(鼠X*鼠Y)*15;
-let 拉=0.5*(鼠X*鼠X+鼠Y*鼠Y)*150-Math.abs(鼠X*鼠Y)*80;
-let 哈=0.5*(鼠X*鼠X+鼠Y*鼠Y)*150+Math.abs(鼠X*鼠Y)*80;
-let 角=鼠X*鼠Y*1500;
-let 雷=Math.abs(鼠X*鼠Y*15000);
-let 扩=Math.abs(鼠X*鼠Y*1e-8);
-let 粘=Math.abs(鼠X*0.002);
-
-覆.innerHTML=`
-<div>φ=(1+√5)/2=${φ.toFixed(15)}</div>
-<div>τ=2π=${τ.toFixed(15)}</div>
-<div>e=${Math.E.toFixed(15)}</div>
-<div>黄金角=2π(1-1/φ)=${(黄*180/π).toFixed(10)}°</div>
-<div>F(${Math.floor(Math.abs(鼠X*40)+Math.abs(鼠Y*40))})=${斐}</div>
-<div>φ^(6|x|+6|y|)=${黄金幂.toFixed(10)}</div>
-<div>Binet公式:F(n)=(φⁿ-ψⁿ)/√5</div>
-<div>ψ=(1-√5)/2=${((1-Math.sqrt(5))/2).toFixed(15)}</div>
-<div>lim[F(n+1)/F(n)]=φ</div>
-<div>连分数:φ=1+1/(1+1/(1+...))</div>
-<div>螺旋:r(θ)=ae^(bθ)</div>
-<div>对数螺旋:b=cot(α)=${(1/Math.tan(黄)).toFixed(10)}</div>
-<div>极坐标:r=${(复模*500).toFixed(6)}</div>
-<div>θ=${复角.toFixed(10)}rad=${(复角*180/π).toFixed(6)}°</div>
-<div>笛卡尔:(x,y)=(${鼠X.toFixed(8)},${鼠Y.toFixed(8)})</div>
-<div>复数:z=${鼠X.toFixed(8)}+${鼠Y.toFixed(8)}i</div>
-<div>模:|z|=${复模.toFixed(10)}</div>
-<div>幅角:arg(z)=${复角.toFixed(10)}</div>
-<div>指数:z=${复模.toFixed(8)}e^(i·${复角.toFixed(8)})</div>
-<div>共轭:z̄=${鼠X.toFixed(8)}-${Math.abs(鼠Y).toFixed(8)}i</div>
-<div>欧拉:e^(iθ)=cos(θ)+i·sin(θ)</div>
-<div>e^(iπ)+1=0</div>
-<div>De Moivre:(cosθ+isinθ)ⁿ=cos(nθ)+isin(nθ)</div>
-<div>Mandelbrot迭代=${曼德}</div>
-<div>Julia集:z←z²+c</div>
-<div>分形维数:D=${(1.8+Math.abs(鼠X)*0.5).toFixed(8)}</div>
-<div>Hausdorff:d_H=${(2.2+Math.abs(鼠Y)*0.8).toFixed(8)}</div>
-<div>Koch:D=log4/log3=${(Math.log(4)/Math.log(3)).toFixed(10)}</div>
-<div>Sierpinski:D=log3/log2=${(Math.log(3)/Math.log(2)).toFixed(10)}</div>
-<div>Cantor:D=log2/log3=${(Math.log(2)/Math.log(3)).toFixed(10)}</div>
-<div>傅里叶级数:f(t)=a₀/2+Σ(aₙcos(nωt)+bₙsin(nωt))</div>
-<div>傅里叶和(30项)=${傅.toFixed(10)}</div>
-<div>傅里叶变换:F(ω)=∫f(t)e^(-iωt)dt</div>
-<div>Parseval:∫|f(t)|²dt=∫|F(ω)|²dω</div>
-<div>卷积:ℱ{f*g}=ℱ{f}·ℱ{g}</div>
-<div>Dirac:∫δ(x)f(x)dx=f(0)</div>
-<div>波动:∂²ψ/∂t²=c²∇²ψ</div>
-<div>波函数:ψ(x,y,t)=${波.toFixed(10)}</div>
-<div>概率:|ψ|²=${(波*波).toFixed(10)}</div>
-<div>归一化:∫|ψ|²dV=1</div>
-<div>薛定谔:iℏ∂ψ/∂t=Ĥψ</div>
-<div>哈密顿:Ĥ=-ℏ²/(2m)∇²+V</div>
-<div>能量:E=${能.toFixed(8)}eV</div>
-<div>谐振子:E_n=ℏω(n+1/2)</div>
-<div>氢原子:E_n=-13.6eV/n²</div>
-<div>Bohr:a₀=ℏ²/(mₑe²)=${(5.29e-11).toExponential(8)}m</div>
-<div>精细结构:α≈1/137.036</div>
-<div>Rydberg:R_∞=${(1.097e7).toExponential(10)}m⁻¹</div>
-<div>Compton:λ_C=${(2.426e-12).toExponential(10)}m</div>
-<div>de Broglie:λ=h/p</div>
-<div>不确定性:ΔxΔp≥ℏ/2</div>
-<div>ΔEΔt≥ℏ/2</div>
-<div>角动量:L=r×p=${角.toFixed(8)}ℏ</div>
-<div>量子化:[L_i,L_j]=iℏε_{ijk}L_k</div>
-<div>L²|l,m⟩=ℏ²l(l+1)|l,m⟩</div>
-<div>L_z|l,m⟩=ℏm|l,m⟩</div>
-<div>自旋:S²=ℏ²s(s+1)</div>
-<div>Pauli:σ_x,σ_y,σ_z</div>
-<div>[σ_i,σ_j]=2iε_{ijk}σ_k</div>
-<div>总角动量:J=L+S</div>
-<div>球谐:Y_l^m(θ,φ)</div>
-<div>Legendre:P_l(cosθ)</div>
-<div>正交:∫Y_l^m*Y_{l'}^{m'}dΩ=δ_{ll'}δ_{mm'}</div>
-<div>拉格朗日:L=T-V=${拉.toFixed(8)}J</div>
-<div>作用量:S=∫L dt</div>
-<div>最小作用量:δS=0</div>
-<div>Euler-Lagrange:d/dt(∂L/∂q̇)=∂L/∂q</div>
-<div>广义动量:p=∂L/∂q̇</div>
-<div>Noether:对称性↔守恒律</div>
-<div>时间平移→能量守恒</div>
-<div>空间平移→动量守恒</div>
-<div>旋转→角动量守恒</div>
-<div>Hamilton:H=Σpq̇-L=${哈.toFixed(8)}J</div>
-<div>正则:q̇=∂H/∂p</div>
-<div>ṗ=-∂H/∂q</div>
-<div>Poisson:{f,g}=Σ(∂f/∂q·∂g/∂p-∂f/∂p·∂g/∂q)</div>
-<div>{q,p}=1</div>
-<div>Liouville:dρ/dt={ρ,H}=0</div>
-<div>Hamilton-Jacobi:H+∂S/∂t=0</div>
-<div>Lyapunov:λ=${(Math.abs(鼠X*鼠Y*3)).toFixed(10)}</div>
-<div>混沌:λ>0</div>
-<div>遍历性:时间=空间平均</div>
-<div>统计:S=k_B ln Ω</div>
-<div>Boltzmann:k_B=${(1.381e-23).toExponential(10)}J/K</div>
-<div>配分函数:Z=Σe^(-E/k_BT)</div>
-<div>正则:p=e^(-E/k_BT)/Z</div>
-<div>自由能:F=-k_BT ln Z</div>
-<div>内能:U=-∂ln Z/∂β</div>
-<div>熵:S=-k_BΣp ln p</div>
-<div>第二定律:dS≥0</div>
-<div>Gibbs:G=H-TS</div>
-<div>化学势:μ=∂G/∂N</div>
-<div>Fermi-Dirac:f=1/(e^((E-μ)/k_BT)+1)</div>
-<div>Bose-Einstein:n=1/(e^((E-μ)/k_BT)-1)</div>
-<div>Maxwell-Boltzmann:f∝e^(-E/k_BT)</div>
-<div>Planck:B(ν,T)=2hν³/c²·1/(e^(hν/k_BT)-1)</div>
-<div>Wien:λ_max T=2.898×10⁻³m·K</div>
-<div>Stefan-Boltzmann:j=σT⁴</div>
-<div>σ=${(5.67e-8).toExponential(8)}W·m⁻²·K⁻⁴</div>
-<div>光电效应:E_k=hν-W</div>
-<div>Compton:Δλ=λ_C(1-cosθ)</div>
-<div>Maxwell:∇·E=ρ/ε₀</div>
-<div>∇·B=0</div>
-<div>∇×E=-∂B/∂t</div>
-<div>∇×B=μ₀J+μ₀ε₀∂E/∂t</div>
-<div>Lorentz:F=q(E+v×B)</div>
-<div>电磁波:c=1/√(μ₀ε₀)</div>
-<div>Poynting:S=E×H/μ₀</div>
-<div>能量密度:u=ε₀E²/2+B²/(2μ₀)</div>
-<div>辐射压:P=I/c</div>
-<div>Larmor:P=q²a²/(6πε₀c³)</div>
-<div>相对论:E²=(pc)²+(mc²)²</div>
-<div>E=γmc²</div>
-<div>γ=1/√(1-v²/c²)=${(1/Math.sqrt(1-Math.min(0.99,Math.abs(鼠X*0.3))**2)).toFixed(10)}</div>
-<div>时间膨胀:Δt'=γΔt</div>
-<div>长度收缩:L'=L/γ</div>
-<div>速度加法:u'=(u-v)/(1-uv/c²)</div>
-<div>Doppler:ν'=ν√((1-β)/(1+β))</div>
-<div>四维:x^μ=(ct,x,y,z)</div>
-<div>度规:η_μν=diag(-1,1,1,1)</div>
-<div>间隔:ds²=-c²dt²+dx²+dy²+dz²</div>
-<div>固有时:dτ=dt/γ</div>
-<div>四维速度:u^μ=dx^μ/dτ</div>
-<div>四维动量:p^μ=(E/c,p)</div>
-<div>p^μp_μ=-m²c²</div>
-<div>Einstein:R_μν-½Rg_μν+Λg_μν=8πG/c⁴·T_μν</div>
-<div>Ricci:R_μν</div>
-<div>Ricci标量:R</div>
-<div>宇宙学常数:Λ</div>
-<div>能动张量:T_μν</div>
-<div>测地线:d²x^μ/dτ²+Γ^μ_αβ dx^α/dτ dx^β/dτ=0</div>
-<div>Christoffel:Γ^λ_μν</div>
-<div>Riemann:R^ρ_σμν</div>
-<div>Schwarzschild:黑洞</div>
-<div>事件视界:r_s=2GM/c²</div>
-<div>Hawking:T_H=ℏc³/(8πGMk_B)</div>
-<div>黑洞熵:S_BH=k_Bc³A/(4Gℏ)</div>
-<div>全息原理</div>
-<div>引力波:h_μν</div>
-<div>应变:h≈${(Math.abs(鼠X*鼠Y*1e-21)).toExponential(10)}</div>
-<div>Friedmann:(ȧ/a)²=8πGρ/3-k/a²+Λ/3</div>
-<div>Hubble:H=ȧ/a≈70km·s⁻¹·Mpc⁻¹</div>
-<div>临界密度:ρ_c=3H²/(8πG)</div>
-<div>Ω=ρ/ρ_c</div>
-<div>暗物质:Ω_DM≈0.27</div>
-<div>暗能量:Ω_Λ≈0.68</div>
-<div>重子:Ω_b≈0.05</div>
-<div>宇宙年龄:t₀≈13.8Gyr</div>
-<div>红移:z=(λ_obs-λ_emit)/λ_emit</div>
-<div>CMB:T=2.725K</div>
-<div>标准模型:SU(3)_C×SU(2)_L×U(1)_Y</div>
-<div>夸克:u,d,c,s,t,b</div>
-<div>轻子:e,μ,τ,ν_e,ν_μ,ν_τ</div>
-<div>规范玻色子:γ,W±,Z,g</div>
-<div>Higgs:m_H≈125GeV</div>
-<div>QCD:渐近自由</div>
-<div>弱相互作用:电弱统一</div>
-<div>Fermi:G_F=${(1.166e-5).toExponential(10)}GeV⁻²</div>
-<div>Weinberg:sin²θ_W≈0.23</div>
-<div>超对称:SUSY</div>
-<div>弦论:D=10</div>
-<div>M理论:D=11</div>
-<div>AdS/CFT:全息对偶</div>
-<div>Planck:l_P=${(1.616e-35).toExponential(10)}m</div>
-<div>t_P=${(5.391e-44).toExponential(10)}s</div>
-<div>E_P≈1.22×10¹⁹GeV</div>
-<div>圈量子引力:LQG</div>
-<div>自旋网络</div>
-<div>λ演算:函数抽象</div>
-<div>Curry-Howard:命题=类型</div>
-<div>证明=程序</div>
-<div>同伦类型论:HoTT</div>
-<div>∞-范畴</div>
-<div>拓扑:π_n(X)</div>
-<div>同调:H_n(X)</div>
-<div>上同调:H^n(X)</div>
-<div>Poincaré对偶</div>
-<div>Chern类</div>
-<div>Atiyah-Singer指标</div>
-<div>K理论</div>
-<div>纽结:Jones多项式</div>
-<div>Chern-Simons:3维</div>
-<div>辛几何:ω</div>
-<div>Floer同调</div>
-<div>镜像对称</div>
-<div>Gromov-Witten不变量</div>
-<div>Fukaya范畴</div>
-<div>量子上同调</div>
-<div>Riemann猜想:ζ(s)</div>
-<div>BSD猜想:L函数</div>
-<div>Hodge猜想:代数闭链</div>
-<div>Yang-Mills:质量间隙</div>
-<div>Navier-Stokes:存在性</div>
-<div>P vs NP:计算复杂性</div>
-<div>Goldbach猜想:偶数=两素数和</div>
-<div>孪生素数猜想</div>
-<div>Collatz猜想:3n+1</div>
-<div>Fermat大定理:已证</div>
-<div>四色定理:已证</div>
-<div>Poincaré猜想:已证</div>
-<div>Kepler猜想:已证</div>
-<div>时刻:t=${时.toFixed(8)}s</div>
-<div>帧率:${(1/0.016).toFixed(2)}fps</div>
-<div>鼠标速度:v=${Math.sqrt(速X*速X+速Y*速Y).toFixed(8)}</div>
-<div>Reynolds:Re=${雷.toFixed(2)}</div>
-<div>扩散:D=${扩.toExponential(8)}m²/s</div>
-<div>粘度:η=${粘.toFixed(10)}Pa·s</div>
-<div>黄金螺旋之美:φ^∞→∞</div>
-<div>数学即宇宙语言</div>
-<div>一切皆数:Pythagoras</div>
-<div>上帝是数学家:Galileo</div>
-<div>不完备性:Gödel</div>
-<div>可计算性:Turing</div>
-<div>混沌边缘</div>
-<div>涌现:整体>部分</div>
-<div>对称性:守恒律</div>
-<div>简单:优雅</div>
-<div>复杂:丰富</div>
-<div>秩序:结构</div>
-<div>混沌:随机</div>
-<div>确定:规律</div>
-<div>不确定:量子</div>
-<div>连续:微积分</div>
-<div>离散:组合</div>
-<div>有限:计算</div>
-<div>无限:极限</div>
-<div>收敛:稳定</div>
-<div>发散:不稳定</div>
-<div>线性:叠加</div>
-<div>非线性:涌现</div>
-<div>局域:近邻</div>
-<div>非局域:纠缠</div>
-<div>经典:宏观</div>
-<div>量子:微观</div>
-<div>相对论:时空</div>
-<div>场:连续</div>
-<div>粒子:量子化</div>
-<div>波:干涉</div>
-<div>波粒二象性</div>
-<div>互补原理:Bohr</div>
-<div>对应原理:经典极限</div>
-<div>等效原理:引力=加速度</div>
-<div>光速不变:c</div>
-<div>因果性:光锥</div>
-<div>幺正性:概率守恒</div>
-<div>厄米性:可观测量</div>
-<div>规范不变性</div>
-<div>重整化:标度</div>
-<div>普适性:临界</div>
-<div>自发破缺:真空</div>
-<div>拓扑:整体</div>
-<div>几何:局部</div>
-<div>代数:结构</div>
-<div>分析:极限</div>
-<div>数论:整数</div>
-<div>组合:计数</div>
-<div>概率:测度</div>
-<div>统计:推断</div>
-<div>逻辑:推理</div>
-<div>集合:基础</div>
-<div>范畴:态射</div>
-<div>函子:映射</div>
-<div>自然变换</div>
-<div>伴随:对偶</div>
-<div>极限:万有性质</div>
-<div>Yoneda引理</div>
-<div>表示:函子</div>
-<div>层:局部-整体</div>
-<div>概形:局部环空间</div>
-<div>栈:广群胚</div>
-<div>导出范畴</div>
-<div>三角范畴</div>
-<div>DG范畴</div>
-<div>A_∞范畴</div>
-<div>稳定∞范畴</div>
-<div>谱:稳定同伦</div>
-<div>模型范畴</div>
-<div>Quillen等价</div>
-<div>拟范畴</div>
-<div>∞-topos</div>
-<div>导出代数几何</div>
-<div>完美复形</div>
-<div>刚性:紧对象</div>
-<div>光滑:无穷小</div>
-<div>真:满射</div>
-<div>平坦:张量正合</div>
-<div>忠实平坦下降</div>
-<div>étale拓扑</div>
-<div>Grothendieck拓扑</div>
-<div>topos:层范畴</div>
-<div>几何态射</div>
-<div>点:Set→ℰ</div>
-<div>内逻辑</div>
-<div>子对象分类子:Ω</div>
-<div>幂对象:指数</div>
-<div>自然数对象:ℕ</div>
-<div>直觉主义逻辑</div>
-<div>构造数学</div>
-<div>类型论</div>
-<div>依赖类型</div>
-<div>Π类型:依赖函数</div>
-<div>Σ类型:依赖对</div>
-<div>相等类型:Id</div>
-<div>路径归纳</div>
-<div>传输:沿路径</div>
-<div>函数外延</div>
-<div>命题外延</div>
-<div>商类型</div>
-<div>高阶归纳类型</div>
-<div>圆:S¹</div>
-<div>球:Sⁿ</div>
-<div>截断:‖A‖_n</div>
-<div>命题:h-prop</div>
-<div>集合:h-set</div>
-<div>群胚:h-groupoid</div>
-<div>单值公理</div>
-<div>综合同伦论</div>
-<div>立方类型论</div>
-<div>De Morgan立方</div>
-<div>Cartesian立方</div>
-<div>连接:∧,∨</div>
-<div>填充:Kan</div>
-<div>正规化:算法</div>
-<div>典范性:值</div>
-<div>判定性:算法</div>
-<div>可计算:有效</div>
-<div>构造:见证</div>
-<div>证明相关</div>
-<div>证明无关</div>
-<div>外延:黑盒</div>
-<div>内涵:白盒</div>
-<div>抽象:接口</div>
-<div>实现:具体</div>
-<div>规范:契约</div>
-<div>精化:实现规范</div>
-<div>模拟:行为包含</div>
-<div>双模拟:等价</div>
-<div>互模拟:不动点</div>
-<div>余归纳:无穷</div>
-<div>流:无穷列表</div>
-<div>余递归:生产</div>
-<div>终结性:唯一</div>
-<div>始性:初始</div>
-<div>万有性质</div>
-<div>伴随函子</div>
-<div>单子:自函子</div>
-<div>Kleisli范畴</div>
-<div>Eilenberg-Moore</div>
-<div>代数效应</div>
-<div>effect系统</div>
-<div>纯函数</div>
-<div>引用透明</div>
-<div>惰性求值</div>
-<div>严格求值</div>
-<div>闭包:捕获</div>
-<div>高阶函数</div>
-<div>柯里化</div>
-<div>部分应用</div>
-<div>组合:复合</div>
-<div>映射:map</div>
-<div>过滤:filter</div>
-<div>折叠:fold</div>
-<div>展开:unfold</div>
-<div>zip:配对</div>
-<div>flatMap:bind</div>
-<div>applicative:⊛</div>
-<div>functor:fmap</div>
-<div>自然变换:多态</div>
-<div>参数化:泛型</div>
-<div>ad-hoc多态</div>
-<div>子类型:继承</div>
-<div>协变:保持</div>
-<div>逆变:反转</div>
-<div>不变:固定</div>
-<div>存在类型:∃</div>
-<div>全称类型:∀</div>
-<div>System F:二阶λ</div>
-<div>System Fω:高阶</div>
-<div>线性逻辑</div>
-<div>!指数:复制</div>
-<div>⊗张量:并行</div>
-<div>⊕加:选择</div>
-<div>&与:提供</div>
-<div>⊸线性蕴涵</div>
-<div>证明网</div>
-<div>切消除</div>
-<div>Girard翻译</div>
-<div>双重否定</div>
-<div>continuation</div>
-<div>call/cc</div>
-<div>monad:计算</div>
-<div>Maybe:可选</div>
-<div>Either:错误</div>
-<div>List:非确定</div>
-<div>State:状态</div>
-<div>Reader:环境</div>
-<div>Writer:日志</div>
-<div>IO:副作用</div>
-<div>Cont:控制流</div>
-<div>Free:自由</div>
-<div>Cofree:余自由</div>
-<div>Comonad:余单子</div>
-<div>Zipper:焦点</div>
-<div>Lens:光学</div>
-<div>Prism:棱镜</div>
-<div>Traversal:遍历</div>
-<div>Iso:同构</div>
-<div>Profunctor:双函子</div>
-<div>Arrow:箭头</div>
-<div>Applicative:应用</div>
-<div>Alternative:选择</div>
-<div>Foldable:可折叠</div>
-<div>Traversable:可遍历</div>
-<div>Semigroup:半群</div>
-<div>Monoid:幺半群</div>
-<div>Group:群</div>
-<div>Ring:环</div>
-<div>Field:域</div>
-<div>Vector space:向量空间</div>
-<div>Module:模</div>
-<div>Algebra:代数</div>
-<div>Coalgebra:余代数</div>
-<div>Bialgebra:双代数</div>
-<div>Hopf algebra:Hopf代数</div>
-<div>Lie algebra:李代数</div>
-<div>Clifford algebra:Clifford代数</div>
-<div>Exterior algebra:外代数</div>
-<div>Tensor algebra:张量代数</div>
-<div>Symmetric algebra:对称代数</div>
-<div>Universal enveloping:泛包络</div>
-<div>Representation:表示</div>
-<div>Character:特征标</div>
-<div>Schur:Schur引理</div>
-<div>Peter-Weyl:Peter-Weyl定理</div>
-<div>Haar measure:Haar测度</div>
-<div>Pontryagin duality:Pontryagin对偶</div>
-<div>Fourier analysis:Fourier分析</div>
-<div>Harmonic analysis:调和分析</div>
-<div>Spectral theory:谱理论</div>
-<div>Operator theory:算子理论</div>
-<div>Functional analysis:泛函分析</div>
-<div>Banach space:Banach空间</div>
-<div>Hilbert space:Hilbert空间</div>
-<div>C*-algebra:C*-代数</div>
-<div>von Neumann algebra:von Neumann代数</div>
-<div>Noncommutative geometry:非交换几何</div>
-<div>Quantum groups:量子群</div>
-<div>Knot invariants:纽结不变量</div>
-<div>3-manifolds:3-流形</div>
-<div>4-manifolds:4-流形</div>
-<div>Symplectic topology:辛拓扑</div>
-<div>Contact topology:接触拓扑</div>
-<div>Floer homology:Floer同调</div>
-<div>Gauge theory:规范论</div>
-<div>Donaldson theory:Donaldson理论</div>
-<div>Seiberg-Witten:Seiberg-Witten理论</div>
-<div>Mirror symmetry:镜像对称</div>
-<div>Homological mirror:同调镜像</div>
-<div>SYZ conjecture:SYZ猜想</div>
-<div>Tropical geometry:热带几何</div>
-<div>Berkovich spaces:Berkovich空间</div>
-<div>Perfectoid spaces:Perfectoid空间</div>
-<div>Condensed mathematics:凝聚数学</div>
-<div>Pyknotic sets:Pyknotic集</div>
-<div>∞-categories:∞-范畴</div>
-<div>Higher topos theory:高阶topos理论</div>
-<div>Derived algebraic geometry:导出代数几何</div>
-<div>Spectral algebraic geometry:谱代数几何</div>
-<div>Chromatic homotopy:色同伦</div>
-<div>Stable homotopy:稳定同伦</div>
-<div>Motivic homotopy:动机同伦</div>
-<div>Equivariant homotopy:等变同伦</div>
-<div>Rational homotopy:有理同伦</div>
-<div>p-adic homotopy:p-进同伦</div>
-<div>Arithmetic geometry:算术几何</div>
-<div>Anabelian geometry:Anabelian几何</div>
-<div>Langlands program:Langlands纲领</div>
-<div>Geometric Langlands:几何Langlands</div>
-<div>Quantum Langlands:量子Langlands</div>
-<div>Representation theory:表示论</div>
-<div>Geometric representation:几何表示</div>
-<div>Categorical representation:范畴表示</div>
-<div>Perverse sheaves:反常层</div>
-<div>D-modules:D-模</div>
-<div>Microlocal analysis:微局部分析</div>
-<div>Symplectic geometry:辛几何</div>
-<div>Poisson geometry:Poisson几何</div>
-<div>Deformation quantization:形变量子化</div>
-<div>Kontsevich formula:Kontsevich公式</div>
-<div>Hochschild cohomology:Hochschild上同调</div>
-<div>Cyclic cohomology:循环上同调</div>
-<div>K-theory:K-理论</div>
-<div>Algebraic K-theory:代数K-理论</div>
-<div>Topological K-theory:拓扑K-理论</div>
-<div>Hermitian K-theory:Hermitian K-理论</div>
-<div>Motivic cohomology:动机上同调</div>
-<div>Chow groups:Chow群</div>
-<div>Algebraic cycles:代数闭链</div>
-<div>Hodge theory:Hodge理论</div>
-<div>Mixed Hodge structures:混合Hodge结构</div>
-<div>Variations of Hodge:Hodge变分</div>
-<div>Period domains:周期域</div>
-<div>Shimura varieties:Shimura簇</div>
-<div>Automorphic forms:自守形式</div>
-<div>Modular forms:模形式</div>
-<div>Elliptic curves:椭圆曲线</div>
-<div>Abelian varieties:Abel簇</div>
-<div>Jacobians:Jacobian</div>
-<div>Theta functions:Theta函数</div>
-<div>Riemann surfaces:Riemann曲面</div>
-<div>Teichmüller theory:Teichmüller理论</div>
-<div>Mapping class groups:映射类群</div>
-<div>Hyperbolic geometry:双曲几何</div>
-<div>Kleinian groups:Kleinian群</div>
-<div>Geometric group theory:几何群论</div>
-<div>CAT(0) spaces:CAT(0)空间</div>
-<div>Gromov hyperbolic:Gromov双曲</div>
-<div>Quasi-isometry:拟等距</div>
-<div>Asymptotic geometry:渐近几何</div>
-<div>Coarse geometry:粗几何</div>
-<div>Index theory:指标理论</div>
-<div>Elliptic operators:椭圆算子</div>
-<div>Dirac operators:Dirac算子</div>
-<div>Spin geometry:Spin几何</div>
-<div>Spinor bundles:Spinor丛</div>
-<div>Clifford modules:Clifford模</div>
-<div>Positive scalar curvature:正标量曲率</div>
-<div>Minimal surfaces:极小曲面</div>
-<div>Mean curvature flow:平均曲率流</div>
-<div>Ricci flow:Ricci流</div>
-<div>Geometric flows:几何流</div>
-<div>Singularity formation:奇点形成</div>
-<div>Blow-up analysis:爆破分析</div>
-<div>Concentration-compactness:集中-紧性</div>
-<div>Calculus of variations:变分法</div>
-<div>Critical point theory:临界点理论</div>
-<div>Morse theory:Morse理论</div>
-<div>Floer theory:Floer理论</div>
-<div>Symplectic Floer:辛Floer</div>
-<div>Lagrangian Floer:Lagrangian Floer</div>
-<div>Heegaard Floer:Heegaard Floer</div>
-<div>Embedded contact:嵌入接触</div>
-<div>Seiberg-Witten Floer:Seiberg-Witten Floer</div>
-<div>Instanton Floer:瞬子Floer</div>
-<div>Monopole Floer:单极Floer</div>
-<div>Khovanov homology:Khovanov同调</div>
-<div>Knot Floer:纽结Floer</div>
-<div>Heegaard diagrams:Heegaard图</div>
-<div>Grid diagrams:网格图</div>
-<div>Bordered Floer:有边Floer</div>
-<div>Fukaya categories:Fukaya范畴</div>
-<div>Wrapped Fukaya:包裹Fukaya</div>
-<div>Symplectic cohomology:辛上同调</div>
-<div>Rabinowitz Floer:Rabinowitz Floer</div>
-<div>Viterbo functoriality:Viterbo函子性</div>
-<div>Quantum cohomology:量子上同调</div>
-<div>Gromov-Witten theory:Gromov-Witten理论</div>
-<div>Donaldson-Thomas:Donaldson-Thomas不变量</div>
-<div>Pandharipande-Thomas:Pandharipande-Thomas不变量</div>
-<div>Gopakumar-Vafa:Gopakumar-Vafa不变量</div>
-<div>BPS states:BPS态</div>
-<div>Wall-crossing:墙穿越</div>
-<div>Stability conditions:稳定性条件</div>
-<div>Bridgeland stability:Bridgeland稳定性</div>
-<div>Derived categories:导出范畴</div>
-<div>Triangulated categories:三角范畴</div>
-<div>t-structures:t-结构</div>
-<div>Perverse t-structure:反常t-结构</div>
-<div>Torsion pairs:挠对</div>
-<div>Tilting theory:倾斜理论</div>
-<div>Cluster algebras:簇代数</div>
-<div>Quiver representations:箭图表示</div>
-<div>Preprojective algebras:预投射代数</div>
-<div>Hall algebras:Hall代数</div>
-<div>Quantum groups:量子群</div>
-<div>Crystal bases:晶体基</div>
-<div>Canonical bases:典范基</div>
-<div>Kazhdan-Lusztig:Kazhdan-Lusztig多项式</div>
-<div>Hecke algebras:Hecke代数</div>
-<div>Affine Hecke:仿射Hecke</div>
-<div>Double affine:双仿射</div>
-<div>Cherednik algebras:Cherednik代数</div>
-<div>Rational DAHA:有理DAHA</div>
-<div>Macdonald polynomials:Macdonald多项式</div>
-<div>Jack polynomials:Jack多项式</div>
-<div>Symmetric functions:对称函数</div>
-<div>Schur functions:Schur函数</div>
-<div>Hall-Littlewood:Hall-Littlewood多项式</div>
-<div>Kostka numbers:Kostka数</div>
-<div>Littlewood-Richardson:Littlewood-Richardson系数</div>
-<div>Kronecker coefficients:Kronecker系数</div>
-<div>Plethysm:Plethysm</div>
-<div>Representation stability:表示稳定性</div>
-<div>FI-modules:FI-模</div>
-<div>Church-Farb:Church-Farb理论</div>
-<div>Homological stability:同调稳定性</div>
-<div>Stable cohomology:稳定上同调</div>
-<div>Mapping class groups:映射类群</div>
-<div>Torelli groups:Torelli群</div>
-<div>Johnson homomorphism:Johnson同态</div>
-<div>Morita theory:Morita理论</div>
-<div>Derived Morita:导出Morita</div>
-<div>Hochschild homology:Hochschild同调</div>
-<div>Cyclic homology:循环同调</div>
-<div>Negative cyclic:负循环</div>
-<div>Periodic cyclic:周期循环</div>
-<div>Connes B operator:Connes B算子</div>
-<div>Chern character:Chern特征</div>
-<div>Todd class:Todd类</div>
-<div>HKR theorem:HKR定理</div>
-<div>Deligne conjecture:Deligne猜想</div>
-<div>Operads:Operad</div>
-<div>E_n operads:E_n operad</div>
-<div>Little disks:小圆盘</div>
-<div>Formality:形式性</div>
-<div>Kontsevich formality:Kontsevich形式性</div>
-<div>Tamarkin formality:Tamarkin形式性</div>
-<div>Swiss-cheese:瑞士奶酪</div>
-<div>Factorization algebras:因子化代数</div>
-<div>Chiral algebras:手征代数</div>
-<div>Vertex algebras:顶点代数</div>
-<div>Conformal field theory:共形场论</div>
-<div>Virasoro algebra:Virasoro代数</div>
-<div>Kac-Moody algebras:Kac-Moody代数</div>
-<div>Affine Lie algebras:仿射李代数</div>
-<div>Loop algebras:圈代数</div>
-<div>Current algebras:流代数</div>
-<div>WZW models:WZW模型</div>
-<div>Fusion rules:融合规则</div>
-<div>Verlinde formula:Verlinde公式</div>
-<div>Modular tensor categories:模张量范畴</div>
-<div>Braided tensor:辫张量</div>
-<div>Ribbon categories:带范畴</div>
-<div>Pivotal categories:枢轴范畴</div>
-<div>Spherical categories:球范畴</div>
-<div>Fusion categories:融合范畴</div>
-<div>Module categories:模范畴</div>
-<div>Bimodule categories:双模范畴</div>
-<div>Morita equivalence:Morita等价</div>
-<div>Drinfeld center:Drinfeld中心</div>
-<div>Müger center:Müger中心</div>
-<div>Tannakian reconstruction:Tannakian重构</div>
-<div>Fiber functors:纤维函子</div>
-<div>Neutral Tannakian:中性Tannakian</div>
-<div>Mixed Tannakian:混合Tannakian</div>
-<div>Motivic Galois:动机Galois</div>
-<div>Fundamental group:基本群</div>
-<div>Étale fundamental:étale基本群</div>
-<div>Algebraic fundamental:代数基本群</div>
-<div>Grothendieck-Teichmüller:Grothendieck-Teichmüller群</div>
-<div>Absolute Galois:绝对Galois</div>
-<div>Anabelian:Anabelian</div>
-<div>Section conjecture:截面猜想</div>
-<div>Birch-Swinnerton-Dyer:Birch-Swinnerton-Dyer猜想</div>
-<div>L-functions:L-函数</div>
-<div>Zeta functions:Zeta函数</div>
-<div>Riemann zeta:Riemann zeta</div>
-<div>Dedekind zeta:Dedekind zeta</div>
-<div>Hasse-Weil:Hasse-Weil zeta</div>
-<div>Local zeta:局部zeta</div>
-<div>p-adic L-functions:p-进L-函数</div>
-<div>Iwasawa theory:Iwasawa理论</div>
-<div>Main conjecture:主猜想</div>
-<div>Cyclotomic fields:分圆域</div>
-<div>Class field theory:类域论</div>
-<div>Reciprocity laws:互反律</div>
-<div>Artin reciprocity:Artin互反</div>
-<div>Local class field:局部类域</div>
-<div>Global class field:整体类域</div>
-<div>Ideles:Idele</div>
-<div>Adeles:Adele</div>
-<div>Restricted products:限制积</div>
-<div>Tamagawa numbers:Tamagawa数</div>
-<div>Weil conjectures:Weil猜想</div>
-<div>Étale cohomology:étale上同调</div>
-<div>l-adic cohomology:l-进上同调</div>
-<div>Crystalline cohomology:晶体上同调</div>
-<div>de Rham cohomology:de Rham上同调</div>
-<div>Comparison theorems:比较定理</div>
-<div>Poincaré duality:Poincaré对偶</div>
-<div>Lefschetz trace:Lefschetz迹</div>
-<div>Fixed point formula:不动点公式</div>
-<div>Grothendieck-Lefschetz:Grothendieck-Lefschetz</div>
-<div>Verdier duality:Verdier对偶</div>
-<div>Six operations:六运算</div>
-<div>f^*,f_*,f_!,f^!,⊗,Hom</div>
-<div>Base change:基变换</div>
-<div>Proper base change:真基变换</div>
-<div>Smooth base change:光滑基变换</div>
-<div>Projection formula:投影公式</div>
-<div>Künneth formula:Künneth公式</div>
-<div>Universal coefficients:万有系数</div>
-<div>Tor and Ext:Tor和Ext</div>
-<div>Derived functors:导出函子</div>
-<div>Spectral sequences:谱序列</div>
-<div>Grothendieck spectral:Grothendieck谱序列</div>
-<div>Hypercohomology:超上同调</div>
-<div>Čech cohomology:Čech上同调</div>
-<div>Sheaf cohomology:层上同调</div>
-<div>Cohomology with supports:带支撑上同调</div>
-<div>Local cohomology:局部上同调</div>
-<div>Depth and dimension:深度和维数</div>
-<div>Cohen-Macaulay:Cohen-Macaulay</div>
-<div>Gorenstein:Gorenstein</div>
-<div>Regular sequences:正则序列</div>
-<div>Koszul complex:Koszul复形</div>
-<div>Koszul duality:Koszul对偶</div>
-<div>Quadratic algebras:二次代数</div>
-<div>Koszul algebras:Koszul代数</div>
-<div>A_∞ algebras:A_∞代数</div>
-<div>L_∞ algebras:L_∞代数</div>
-<div>Homotopy algebras:同伦代数</div>
-<div>Strongly homotopy:强同伦</div>
-<div>Minimal models:极小模型</div>
-<div>Sullivan models:Sullivan模型</div>
-<div>Rational homotopy theory:有理同伦论</div>
-<div>Quillen models:Quillen模型</div>
-<div>DG Lie algebras:DG李代数</div>
-<div>Maurer-Cartan:Maurer-Cartan方程</div>
-<div>Deformation theory:形变理论</div>
-<div>Formal deformations:形式形变</div>
-<div>Infinitesimal deformations:无穷小形变</div>
-<div>Obstruction theory:障碍理论</div>
-<div>Cotangent complex:余切复形</div>
-<div>André-Quillen cohomology:André-Quillen上同调</div>
-<div>Tangent complex:切复形</div>
-<div>Derived schemes:导出概形</div>
-<div>Derived stacks:导出栈</div>
-<div>Derived moduli:导出模</div>
-<div>Virtual fundamental class:虚拟基本类</div>
-<div>Perfect obstruction theory:完美障碍理论</div>
-<div>Behrend function:Behrend函数</div>
-<div>Motivic integration:动机积分</div>
-<div>Arc spaces:弧空间</div>
-<div>Jet schemes:射流概形</div>
-<div>Greenberg schemes:Greenberg概形</div>
-<div>Formal schemes:形式概形</div>
-<div>Completion:完备化</div>
-<div>Henselization:Hensel化</div>
-<div>Strict henselization:严格Hensel化</div>
-<div>Hensel's lemma:Hensel引理</div>
-<div>Newton polygon:Newton多边形</div>
-<div>Puiseux series:Puiseux级数</div>
-<div>Valuation theory:赋值论</div>
-<div>Berkovich spaces:Berkovich空间</div>
-<div>Rigid analytic:刚性解析</div>
-<div>Adic spaces:Adic空间</div>
-<div>Perfectoid spaces:Perfectoid空间</div>
-<div>Tilting correspondence:倾斜对应</div>
-<div>Almost mathematics:几乎数学</div>
-<div>Fargues-Fontaine curve:Fargues-Fontaine曲线</div>
-<div>Diamonds:钻石</div>
-<div>Prismatic cohomology:棱柱上同调</div>
-<div>Syntomic cohomology:Syntomic上同调</div>
-<div>Motivic cohomology:动机上同调</div>
-<div>Algebraic K-theory:代数K-理论</div>
-<div>Milnor K-theory:Milnor K-理论</div>
-<div>Quillen K-theory:Quillen K-理论</div>
-<div>Waldhausen K-theory:Waldhausen K-理论</div>
-<div>A-theory:A-理论</div>
-<div>Pseudoisotopy:伪等距</div>
-<div>Whitehead torsion:Whitehead挠</div>
-<div>Reidemeister torsion:Reidemeister挠</div>
-<div>Franz-Reidemeister:Franz-Reidemeister挠</div>
-<div>Analytic torsion:解析挠</div>
-<div>Ray-Singer torsion:Ray-Singer挠</div>
-<div>Cheeger-Müller theorem:Cheeger-Müller定理</div>
-<div>Bismut-Zhang theorem:Bismut-Zhang定理</div>
-<div>Eta invariant:Eta不变量</div>
-<div>Spectral flow:谱流</div>
-<div>Determinant line bundle:行列式线丛</div>
-<div>Quillen metric:Quillen度量</div>
-<div>Holomorphic torsion:全纯挠</div>
-<div>BCOV theory:BCOV理论</div>
-<div>Topological string:拓扑弦</div>
-<div>A-model:A-模型</div>
-<div>B-model:B-模型</div>
-<div>Open-closed:开-闭</div>
-<div>Topological recursion:拓扑递归</div>
-<div>Eynard-Orantin:Eynard-Orantin</div>
-<div>Matrix models:矩阵模型</div>
-<div>Random matrices:随机矩阵</div>
-<div>Eigenvalue statistics:本征值统计</div>
-<div>Wigner semicircle:Wigner半圆</div>
-<div>Tracy-Widom:Tracy-Widom分布</div>
-<div>Airy kernel:Airy核</div>
-<div>Sine kernel:正弦核</div>
-<div>Bessel kernel:Bessel核</div>
-<div>Determinantal processes:行列式过程</div>
-<div>Point processes:点过程</div>
-<div>Pfaffian processes:Pfaffian过程</div>
-<div>Integrable probability:可积概率</div>
-<div>KPZ universality:KPZ普适性</div>
-<div>Kardar-Parisi-Zhang:Kardar-Parisi-Zhang</div>
-<div>Stochastic growth:随机增长</div>
-<div>TASEP:TASEP</div>
-<div>ASEP:ASEP</div>
-<div>Exclusion processes:排斥过程</div>
-<div>Interacting particle:相互作用粒子</div>
-<div>Hydrodynamic limit:流体力学极限</div>
-<div>Fluctuation-dissipation:涨落-耗散</div>
-<div>Large deviations:大偏差</div>
-<div>Rate functions:速率函数</div>
-<div>Cramér theorem:Cramér定理</div>
-<div>Sanov theorem:Sanov定理</div>
-<div>Varadhan lemma:Varadhan引理</div>
-<div>Contraction principle:收缩原理</div>
-<div>Gärtner-Ellis:Gärtner-Ellis定理</div>
-<div>Concentration inequalities:集中不等式</div>
-<div>Hoeffding:Hoeffding不等式</div>
-<div>Azuma:Azuma不等式</div>
-<div>McDiarmid:McDiarmid不等式</div>
-<div>Talagrand:Talagrand不等式</div>
-<div>Logarithmic Sobolev:对数Sobolev</div>
-<div>Poincaré inequality:Poincaré不等式</div>
-<div>Spectral gap:谱间隙</div>
-<div>Mixing time:混合时间</div>
-<div>Cutoff phenomenon:截断现象</div>
-<div>Markov chains:Markov链</div>
-<div>Metropolis-Hastings:Metropolis-Hastings</div>
-<div>Gibbs sampler:Gibbs采样</div>
-<div>MCMC:MCMC</div>
-<div>Coupling:耦合</div>
-<div>Coupling from past:从过去耦合</div>
-<div>Perfect sampling:完美采样</div>
-<div>Rejection sampling:拒绝采样</div>
-<div>Importance sampling:重要性采样</div>
-<div>Sequential Monte Carlo:序贯Monte Carlo</div>
-<div>Particle filters:粒子滤波</div>
-<div>Kalman filter:Kalman滤波</div>
-<div>Extended Kalman:扩展Kalman</div>
-<div>Unscented Kalman:无迹Kalman</div>
-<div>Ensemble Kalman:集合Kalman</div>
-<div>Data assimilation:数据同化</div>
-<div>Inverse problems:反问题</div>
-<div>Ill-posed problems:不适定问题</div>
-<div>Regularization:正则化</div>
-<div>Tikhonov:Tikhonov正则化</div>
-<div>Total variation:全变差</div>
-<div>Compressed sensing:压缩感知</div>
-<div>Sparse recovery:稀疏恢复</div>
-<div>RIP:受限等距性质</div>
-<div>Null space property:零空间性质</div>
-<div>Coherence:相干性</div>
-<div>Mutual coherence:互相干</div>
-<div>Spark:Spark</div>
-<div>Basis pursuit:基追踪</div>
-<div>Matching pursuit:匹配追踪</div>
-<div>Orthogonal matching:正交匹配追踪</div>
-<div>CoSaMP:CoSaMP</div>
-<div>Iterative hard thresholding:迭代硬阈值</div>
-<div>ADMM:交替方向乘子法</div>
-<div>Proximal methods:近端方法</div>
-<div>Forward-backward:前向-后向</div>
-<div>Douglas-Rachford:Douglas-Rachford</div>
-<div>Peaceman-Rachford:Peaceman-Rachford</div>
-<div>Primal-dual:原始-对偶</div>
-<div>Chambolle-Pock:Chambolle-Pock</div>
-<div>FISTA:FISTA</div>
-<div>Nesterov acceleration:Nesterov加速</div>
-<div>Momentum methods:动量方法</div>
-<div>Heavy ball:重球</div>
-<div>Polyak momentum:Polyak动量</div>
-<div>Adaptive methods:自适应方法</div>
-<div>AdaGrad:AdaGrad</div>
-<div>RMSprop:RMSprop</div>
-<div>Adam:Adam</div>
-<div>AdamW:AdamW</div>
-<div>AMSGrad:AMSGrad</div>
-<div>Lookahead:Lookahead</div>
-<div>RAdam:RAdam</div>
-<div>Ranger:Ranger</div>
-<div>LAMB:LAMB</div>
-<div>LARS:LARS</div>
-<div>Layer-wise adaptive:逐层自适应</div>
-<div>Learning rate schedules:学习率调度</div>
-<div>Step decay:阶梯衰减</div>
-<div>Exponential decay:指数衰减</div>
-<div>Cosine annealing:余弦退火</div>
-<div>Warm restarts:热重启</div>
-<div>Cyclical learning:循环学习</div>
-<div>One-cycle:单周期</div>
-<div>Super-convergence:超收敛</div>
-<div>Learning rate finder:学习率查找</div>
-<div>Gradient clipping:梯度裁剪</div>
-<div>Gradient accumulation:梯度累积</div>
-<div>Mixed precision:混合精度</div>
-<div>Automatic mixed precision:自动混合精度</div>
-<div>Loss scaling:损失缩放</div>
-<div>Dynamic loss scaling:动态损失缩放</div>
-<div>Gradient checkpointing:梯度检查点</div>
-<div>Activation checkpointing:激活检查点</div>
-<div>Memory optimization:内存优化</div>
-<div>Distributed training:分布式训练</div>
-<div>Data parallelism:数据并行</div>
-<div>Model parallelism:模型并行</div>
-<div>Pipeline parallelism:流水线并行</div>
-<div>Tensor parallelism:张量并行</div>
-<div>ZeRO:ZeRO</div>
-<div>DeepSpeed:DeepSpeed</div>
-<div>Megatron:Megatron</div>
-<div>FSDP:FSDP</div>
-<div>Fully sharded:完全分片</div>
-<div>Gradient sharding:梯度分片</div>
-<div>Optimizer sharding:优化器分片</div>
-<div>Parameter sharding:参数分片</div>
-<div>Activation sharding:激活分片</div>
-<div>Sequence parallelism:序列并行</div>
-<div>Context parallelism:上下文并行</div>
-<div>Expert parallelism:专家并行</div>
-<div>Mixture of experts:专家混合</div>
-<div>Sparse MoE:稀疏MoE</div>
-<div>Switch Transformer:Switch Transformer</div>
-<div>GLaM:GLaM</div>
-<div>ST-MoE:ST-MoE</div>
-<div>Routing:路由</div>
-<div>Load balancing:负载均衡</div>
-<div>Auxiliary loss:辅助损失</div>
-<div>Expert capacity:专家容量</div>
-<div>Token dropping:token丢弃</div>
-<div>Top-k routing:Top-k路由</div>
-<div>Soft routing:软路由</div>
-<div>Learned routing:学习路由</div>
-<div>Hash routing:哈希路由</div>
-<div>Random routing:随机路由</div>
-<div>BASE layers:BASE层</div>
-<div>Conditional computation:条件计算</div>
-<div>Dynamic networks:动态网络</div>
-<div>Neural architecture search:神经架构搜索</div>
-<div>Differentiable NAS:可微NAS</div>
-<div>DARTS:DARTS</div>
-<div>ENAS:ENAS</div>
-<div>ProxylessNAS:ProxylessNAS</div>
-<div>FBNet:FBNet</div>
-<div>MnasNet:MnasNet</div>
-<div>EfficientNet:EfficientNet</div>
-<div>Compound scaling:复合缩放</div>
-<div>Width×Depth×Resolution:宽度×深度×分辨率</div>
-<div>Neural ODE:神经ODE</div>
-<div>Continuous depth:连续深度</div>
-<div>Adjoint method:伴随方法</div>
-<div>Reversible networks:可逆网络</div>
-<div>RevNet:RevNet</div>
-<div>i-RevNet:i-RevNet</div>
-<div>Invertible networks:可逆网络</div>
-<div>Normalizing flows:归一化流</div>
-<div>RealNVP:RealNVP</div>
-<div>Glow:Glow</div>
-<div>Flow++:Flow++</div>
-<div>Continuous normalizing:连续归一化流</div>
-<div>FFJORD:FFJORD</div>
-<div>Neural spline flows:神经样条流</div>
-<div>Coupling layers:耦合层</div>
-<div>Autoregressive flows:自回归流</div>
-<div>Inverse autoregressive:逆自回归流</div>
-<div>Masked autoregressive:掩码自回归流</div>
-<div>Parallel WaveNet:并行WaveNet</div>
-<div>Probability distillation:概率蒸馏</div>
-<div>Variational inference:变分推断</div>
-<div>ELBO:ELBO</div>
-<div>Evidence lower bound:证据下界</div>
-<div>KL divergence:KL散度</div>
-<div>Reparameterization trick:重参数化技巧</div>
-<div>VAE:VAE</div>
-<div>β-VAE:β-VAE</div>
-<div>Disentanglement:解耦</div>
-<div>Factor VAE:Factor VAE</div>
-<div>TC-VAE:TC-VAE</div>
-<div>Total correlation:总相关</div>
-<div>VQ-VAE:VQ-VAE</div>
-<div>Vector quantization:向量量化</div>
-<div>Codebook:码本</div>
-<div>Straight-through estimator:直通估计器</div>
-<div>Gumbel-Softmax:Gumbel-Softmax</div>
-<div>Concrete distribution:Concrete分布</div>
-<div>Relaxed categorical:松弛分类</div>
-<div>Discrete latent:离散潜变量</div>
-<div>Categorical VAE:分类VAE</div>
-<div>Hierarchical VAE:层次VAE</div>
-<div>Ladder VAE:梯子VAE</div>
-<div>Importance weighted:重要性加权</div>
-<div>IWAE:IWAE</div>
-<div>Normalizing flows VAE:归一化流VAE</div>
-<div>Adversarial autoencoders:对抗自编码器</div>
-<div>AAE:AAE</div>
-<div>Wasserstein autoencoders:Wasserstein自编码器</div>
-<div>WAE:WAE</div>
-<div>Sliced-Wasserstein:切片Wasserstein</div>
-<div>Maximum mean discrepancy:最大平均差异</div>
-<div>MMD:MMD</div>
-<div>Kernel methods:核方法</div>
-<div>Reproducing kernel:再生核</div>
-<div>RKHS:RKHS</div>
-<div>Kernel trick:核技巧</div>
-<div>Mercer theorem:Mercer定理</div>
-<div>Positive definite:正定</div>
-<div>Gaussian kernel:高斯核</div>
-<div>RBF kernel:RBF核</div>
-<div>Polynomial kernel:多项式核</div>
-<div>String kernel:字符串核</div>
-<div>Graph kernel:图核</div>
-<div>Weisfeiler-Lehman:Weisfeiler-Lehman</div>
-<div>Subtree kernel:子树核</div>
-<div>Random walk kernel:随机游走核</div>
-<div>Shortest path kernel:最短路径核</div>
-<div>Graphlet kernel:Graphlet核</div>
-<div>Deep graph kernels:深度图核</div>
-<div>Neural tangent kernel:神经切核</div>
-<div>NTK:NTK</div>
-<div>Infinite width limit:无限宽度极限</div>
-<div>Lazy training:懒惰训练</div>
-<div>Feature learning:特征学习</div>
-<div>Kernel regime:核区域</div>
-<div>Rich regime:丰富区域</div>
-<div>Mean field theory:平均场理论</div>
-<div>Neural network Gaussian:神经网络高斯过程</div>
-<div>NNGP:NNGP</div>
-<div>Bayesian neural networks:贝叶斯神经网络</div>
-<div>BNN:BNN</div>
-<div>Weight uncertainty:权重不确定性</div>
-<div>Bayes by backprop:反向传播贝叶斯</div>
-<div>Variational inference:变分推断</div>
-<div>MC dropout:MC dropout</div>
-<div>Deep ensembles:深度集成</div>
-<div>Snapshot ensembles:快照集成</div>
-<div>Fast geometric ensembling:快速几何集成</div>
-<div>Stochastic weight averaging:随机权重平均</div>
-<div>SWA:SWA</div>
-<div>SWAG:SWAG</div>
-<div>Gaussian approximation:高斯近似</div>
-<div>Laplace approximation:Laplace近似</div>
-<div>Linearized Laplace:线性化Laplace</div>
-<div>Last layer Laplace:最后一层Laplace</div>
-<div>Subnetwork Laplace:子网络Laplace</div>
-<div>Kronecker factored:Kronecker因子化</div>
-<div>KFAC:KFAC</div>
-<div>Natural gradient:自然梯度</div>
-<div>Fisher information:Fisher信息</div>
-<div>Empirical Fisher:经验Fisher</div>
-<div>Exact Fisher:精确Fisher</div>
-<div>Generalized Gauss-Newton:广义Gauss-Newton</div>
-<div>GGN:GGN</div>
-<div>Hessian:Hessian</div>
-<div>Hessian-vector products:Hessian-向量积</div>
-<div>Hutchinson estimator:Hutchinson估计器</div>
-<div>Stochastic trace estimation:随机迹估计</div>
-<div>Eigenvalue spectrum:本征值谱</div>
-<div>Loss landscape:损失景观</div>
-<div>Mode connectivity:模式连通性</div>
-<div>Linear mode connectivity:线性模式连通性</div>
-<div>Barrier:障碍</div>
-<div>Flat minima:平坦极小</div>
-<div>Sharp minima:尖锐极小</div>
-<div>Sharpness-aware minimization:锐度感知最小化</div>
-<div>SAM:SAM</div>
-<div>Adversarial weight perturbation:对抗权重扰动</div>
-<div>Implicit regularization:隐式正则化</div>
-<div>Implicit bias:隐式偏差</div>
-<div>Gradient descent bias:梯度下降偏差</div>
-<div>Minimum norm solution:最小范数解</div>
-<div>Max margin:最大间隔</div>
-<div>Neural collapse:神经坍缩</div>
-<div>Simplex ETF:单纯形ETF</div>
-<div>Equiangular tight frame:等角紧框架</div>
-<div>Within-class variability:类内变异性</div>
-<div>Between-class separation:类间分离</div>
-<div>Feature normalization:特征归一化</div>
-<div>Weight normalization:权重归一化</div>
-<div>Cosine classifier:余弦分类器</div>
-<div>Normalized softmax:归一化softmax</div>
-<div>Temperature scaling:温度缩放</div>
-<div>Label smoothing:标签平滑</div>
-<div>Mixup:Mixup</div>
-<div>CutMix:CutMix</div>
-<div>Manifold mixup:流形mixup</div>
-<div>Input mixup:输入mixup</div>
-<div>Hidden mixup:隐藏mixup</div>
-<div>Batch mixup:批mixup</div>
-<div>Augmentation strategies:增强策略</div>
-<div>AutoAugment:AutoAugment</div>
-<div>RandAugment:RandAugment</div>
-<div>TrivialAugment:TrivialAugment</div>
-<div>AugMax:AugMax</div>
-<div>Adversarial augmentation:对抗增强</div>
-<div>Learned augmentation:学习增强</div>
-<div>Differentiable augmentation:可微增强</div>
-<div>Consistency regularization:一致性正则化</div>
-<div>Temporal ensembling:时间集成</div>
-<div>Mean teacher:平均教师</div>
-<div>Virtual adversarial:虚拟对抗</div>
-<div>VAT:VAT</div>
-<div>Pseudo-labeling:伪标签</div>
-<div>Self-training:自训练</div>
-<div>Co-training:协同训练</div>
-<div>Tri-training:三训练</div>
-<div>Multi-view learning:多视图学习</div>
-<div>Semi-supervised learning:半监督学习</div>
-<div>Transductive learning:直推学习</div>
-<div>Inductive learning:归纳学习</div>
-<div>Few-shot learning:少样本学习</div>
-<div>Meta-learning:元学习</div>
-<div>Learning to learn:学习学习</div>
-<div>MAML:MAML</div>
-<div>Model-agnostic:模型无关</div>
-<div>First-order MAML:一阶MAML</div>
-<div>Reptile:Reptile</div>
-<div>Prototypical networks:原型网络</div>
-<div>Matching networks:匹配网络</div>
-<div>Relation networks:关系网络</div>
-<div>Siamese networks:孪生网络</div>
-<div>Triplet networks:三元组网络</div>
-<div>Contrastive learning:对比学习</div>
-<div>Metric learning:度量学习</div>
-<div>Distance metric:距离度量</div>
-<div>Euclidean distance:欧氏距离</div>
-<div>Cosine similarity:余弦相似度</div>
-<div>Mahalanobis distance:Mahalanobis距离</div>
-<div>Learned metric:学习度量</div>
-<div>Deep metric learning:深度度量学习</div>
-<div>Triplet loss:三元组损失</div>
-<div>Contrastive loss:对比损失</div>
-<div>N-pair loss:N-对损失</div>
-<div>Lifted structure loss:提升结构损失</div>
-<div>Multi-similarity loss:多相似性损失</div>
-<div>Angular loss:角度损失</div>
-<div>ArcFace:ArcFace</div>
-<div>CosFace:CosFace</div>
-<div>SphereFace:SphereFace</div>
-<div>Additive angular margin:加性角度间隔</div>
-<div>Additive cosine margin:加性余弦间隔</div>
-<div>Large margin softmax:大间隔softmax</div>
-<div>Center loss:中心损失</div>
-<div>Intra-class compactness:类内紧致性</div>
-<div>Inter-class separability:类间可分性</div>
-<div>Discriminative features:判别特征</div>
-<div>Embedding space:嵌入空间</div>
-<div>Hypersphere:超球面</div>
-<div>Unit hypersphere:单位超球面</div>
-<div>Angular space:角度空间</div>
-<div>Geodesic distance:测地距离</div>
-<div>Riemannian metric:Riemann度量</div>
-<div>Manifold learning:流形学习</div>
-<div>Dimensionality reduction:降维</div>
-<div>PCA:PCA</div>
-<div>Kernel PCA:核PCA</div>
-<div>ICA:ICA</div>
-<div>Independent component:独立成分</div>
-<div>Non-Gaussianity:非高斯性</div>
-<div>Mutual information:互信息</div>
-<div>Infomax:Infomax</div>
-<div>Negentropy:负熵</div>
-<div>Kurtosis:峰度</div>
-<div>FastICA:FastICA</div>
-<div>Whitening:白化</div>
-<div>ZCA whitening:ZCA白化</div>
-<div>Sphering:球化</div>
-<div>Decorrelation:去相关</div>
-<div>Factor analysis:因子分析</div>
-<div>Latent factors:潜因子</div>
-<div>Loading matrix:载荷矩阵</div>
-<div>Rotation:旋转</div>
-<div>Varimax:Varimax</div>
-<div>Promax:Promax</div>
-<div>Oblique rotation:斜交旋转</div>
-<div>Orthogonal rotation:正交旋转</div>
-<div>Confirmatory factor:验证性因子</div>
-<div>Exploratory factor:探索性因子</div>
-<div>Structural equation:结构方程</div>
-<div>Path analysis:路径分析</div>
-<div>Mediation:中介</div>
-<div>Moderation:调节</div>
-<div>Indirect effect:间接效应</div>
-<div>Direct effect:直接效应</div>
-<div>Total effect:总效应</div>
-<div>Sobel test:Sobel检验</div>
-<div>Bootstrap confidence:Bootstrap置信区间</div>
-<div>Causal inference:因果推断</div>
-<div>Potential outcomes:潜在结果</div>
-<div>Counterfactuals:反事实</div>
-<div>Treatment effect:处理效应</div>
-<div>ATE:平均处理效应</div>
-<div>ATT:处理组平均处理效应</div>
-<div>CATE:条件平均处理效应</div>
-<div>ITE:个体处理效应</div>
-<div>HTE:异质处理效应</div>
-<div>Propensity score:倾向得分</div>
-<div>Inverse probability:逆概率加权</div>
-<div>IPW:IPW</div>
-<div>Doubly robust:双重稳健</div>
-<div>AIPW:增广IPW</div>
-<div>Targeted maximum likelihood:目标最大似然</div>
-<div>TMLE:TMLE</div>
-<div>Super learner:超级学习器</div>
-<div>Cross-validation:交叉验证</div>
-<div>Stacking:堆叠</div>
-<div>Ensemble learning:集成学习</div>
-<div>Instrumental variables:工具变量</div>
-<div>Two-stage least squares:两阶段最小二乘</div>
-<div>2SLS:2SLS</div>
-<div>Regression discontinuity:回归不连续</div>
-<div>RDD:RDD</div>
-<div>Sharp RDD:尖锐RDD</div>
-<div>Fuzzy RDD:模糊RDD</div>
-<div>Bandwidth selection:带宽选择</div>
-<div>Local polynomial:局部多项式</div>
-<div>Difference-in-differences:双重差分</div>
-<div>DID:DID</div>
-<div>Parallel trends:平行趋势</div>
-<div>Pre-treatment:处理前</div>
-<div>Post-treatment:处理后</div>
-<div>Event study:事件研究</div>
-<div>Dynamic effects:动态效应</div>
-<div>Staggered adoption:交错采用</div>
-<div>Synthetic control:合成控制</div>
-<div>SCM:SCM</div>
-<div>Donor pool:供体池</div>
-<div>Weights:权重</div>
-<div>Placebo tests:安慰剂检验</div>
-<div>Permutation tests:置换检验</div>
-<div>Matching:匹配</div>
-<div>Exact matching:精确匹配</div>
-<div>Coarsened exact:粗化精确匹配</div>
-<div>CEM:CEM</div>
-<div>Propensity score matching:倾向得分匹配</div>
-<div>PSM:PSM</div>
-<div>Nearest neighbor:最近邻</div>
-<div>Caliper:卡尺</div>
-<div>Kernel matching:核匹配</div>
-<div>Mahalanobis matching:Mahalanobis匹配</div>
-<div>Genetic matching:遗传匹配</div>
-<div>Optimal matching:最优匹配</div>
-<div>Full matching:完全匹配</div>
-<div>Subclassification:子分类</div>
-<div>Stratification:分层</div>
-<div>Weighting:加权</div>
-<div>Overlap weights:重叠权重</div>
-<div>Entropy balancing:熵平衡</div>
-<div>Covariate balancing:协变量平衡</div>
-<div>Balance diagnostics:平衡诊断</div>
-<div>Standardized mean difference:标准化均值差</div>
-<div>SMD:SMD</div>
-<div>Variance ratio:方差比</div>
-<div>Love plot:Love图</div>
-<div>Sensitivity analysis:敏感性分析</div>
-<div>Rosenbaum bounds:Rosenbaum界</div>
-<div>Unmeasured confounding:未测量混杂</div>
-<div>Hidden bias:隐藏偏差</div>
-<div>E-value:E-值</div>
-<div>Tipping point:临界点</div>
-<div>Robustness:稳健性</div>
-<div>Falsification tests:证伪检验</div>
-<div>Negative controls:阴性对照</div>
-<div>Positive controls:阳性对照</div>
-<div>Instrumental variable:工具变量</div>
-<div>Exclusion restriction:排除限制</div>
-<div>Relevance:相关性</div>
-<div>Exogeneity:外生性</div>
-<div>Weak instruments:弱工具</div>
-<div>Overidentification:过度识别</div>
-<div>Sargan test:Sargan检验</div>
-<div>Hansen J test:Hansen J检验</div>
-<div>Cragg-Donald:Cragg-Donald统计量</div>
-<div>Stock-Yogo:Stock-Yogo临界值</div>
-<div>Anderson-Rubin:Anderson-Rubin检验</div>
-<div>Limited information:有限信息最大似然</div>
-<div>LIML:LIML</div>
-<div>Fuller:Fuller估计</div>
-<div>Jackknife:Jackknife</div>
-<div>Split-sample:分样本</div>
-<div>Control function:控制函数</div>
-<div>Two-step:两步法</div>
-<div>Residual inclusion:残差包含</div>
-<div>Forbidden regression:禁止回归</div>
-<div>Local average treatment:局部平均处理效应</div>
-<div>LATE:LATE</div>
-<div>Compliers:遵从者</div>
-<div>Always-takers:总是接受者</div>
-<div>Never-takers:从不接受者</div>
-<div>Defiers:违抗者</div>
-<div>Monotonicity:单调性</div>
-<div>Principal stratification:主分层</div>
-<div>Bounds:界</div>
-<div>Partial identification:部分识别</div>
-<div>Worst-case bounds:最坏情况界</div>
-<div>No-assumptions bounds:无假设界</div>
-<div>Monotone treatment:单调处理响应</div>
-<div>MTR:MTR</div>
-<div>Monotone instrumental:单调工具变量</div>
-<div>MIV:MIV</div>
-<div>Shape restrictions:形状限制</div>
-<div>Convexity:凸性</div>
-<div>Concavity:凹性</div>
-<div>Supermodularity:超模性</div>
-<div>Submodularity:次模性</div>
-<div>Lattice theory:格论</div>
-<div>Revealed preference:显示偏好</div>
-<div>GARP:GARP</div>
-<div>Afriat inequalities:Afriat不等式</div>
-<div>Rationalizability:可理性化</div>
-<div>Testable implications:可检验含义</div>
-<div>Refutability:可反驳性</div>
-<div>Moment inequalities:矩不等式</div>
-<div>Conditional moment:条件矩</div>
-<div>Generalized method of moments:广义矩方法</div>
-<div>GMM:GMM</div>
-<div>Optimal weighting:最优加权</div>
-<div>Efficient GMM:有效GMM</div>
-<div>Two-step GMM:两步GMM</div>
-<div>Iterated GMM:迭代GMM</div>
-<div>Continuously updated:连续更新GMM</div>
-<div>CUE:CUE</div>
-<div>Empirical likelihood:经验似然</div>
-<div>EL:EL</div>
-<div>Exponential tilting:指数倾斜</div>
-<div>Cressie-Read:Cressie-Read</div>
-<div>Minimum distance:最小距离</div>
-<div>Chi-square distance:卡方距离</div>
-<div>Hellinger distance:Hellinger距离</div>
-<div>Kullback-Leibler:Kullback-Leibler散度</div>
-<div>Divergence measures:散度测度</div>
-<div>f-divergence:f-散度</div>
-<div>Rényi divergence:Rényi散度</div>
-<div>Tsallis divergence:Tsallis散度</div>
-<div>Alpha-divergence:Alpha-散度</div>
-<div>Beta-divergence:Beta-散度</div>
-<div>Gamma-divergence:Gamma-散度</div>
-<div>Bregman divergence:Bregman散度</div>
-<div>Convex function:凸函数</div>
-<div>Legendre transform:Legendre变换</div>
-<div>Dual function:对偶函数</div>
-<div>Conjugate function:共轭函数</div>
-<div>Fenchel conjugate:Fenchel共轭</div>
-<div>Subdifferential:次微分</div>
-<div>Subgradient:次梯度</div>
-<div>Directional derivative:方向导数</div>
-<div>Gâteaux derivative:Gâteaux导数</div>
-<div>Fréchet derivative:Fréchet导数</div>
-<div>Weak derivative:弱导数</div>
-<div>Distributional derivative:分布导数</div>
-<div>Sobolev spaces:Sobolev空间</div>
-<div>Weak solutions:弱解</div>
-<div>Variational formulation:变分形式</div>
-<div>Galerkin method:Galerkin方法</div>
-<div>Finite elements:有限元</div>
-<div>FEM:FEM</div>
-<div>Finite differences:有限差分</div>
-<div>FDM:FDM</div>
-<div>Finite volumes:有限体积</div>
-<div>FVM:FVM</div>
-<div>Spectral methods:谱方法</div>
-<div>Fourier spectral:Fourier谱</div>
-<div>Chebyshev spectral:Chebyshev谱</div>
-<div>Legendre spectral:Legendre谱</div>
-<div>Pseudospectral:伪谱</div>
-<div>Collocation:配置</div>
-<div>Galerkin spectral:Galerkin谱</div>
-<div>Tau method:Tau方法</div>
-<div>Petrov-Galerkin:Petrov-Galerkin</div>
-<div>Discontinuous Galerkin:间断Galerkin</div>
-<div>DG:DG</div>
-<div>Hybridizable DG:可杂交DG</div>
-<div>HDG:HDG</div>
-<div>Interior penalty:内罚</div>
-<div>Local discontinuous:局部间断Galerkin</div>
-<div>LDG:LDG</div>
-<div>Flux reconstruction:通量重构</div>
-<div>Spectral difference:谱差分</div>
-<div>Spectral volume:谱体积</div>
-<div>Residual distribution:残差分布</div>
-<div>Fluctuation splitting:涨落分裂</div>
-<div>Meshless methods:无网格方法</div>
-<div>Smoothed particle:光滑粒子流体动力学</div>
-<div>SPH:SPH</div>
-<div>Moving least squares:移动最小二乘</div>
-<div>MLS:MLS</div>
-<div>Radial basis functions:径向基函数</div>
-<div>RBF:RBF</div>
-<div>Partition of unity:单位分解</div>
-<div>PUM:PUM</div>
-<div>Generalized finite difference:广义有限差分</div>
-<div>GFDM:GFDM</div>
-<div>Reproducing kernel particle:再生核粒子</div>
-<div>RKPM:RKPM</div>
-<div>Element-free Galerkin:无单元Galerkin</div>
-<div>EFG:EFG</div>
-<div>hp-clouds:hp-云</div>
-<div>Natural element:自然单元</div>
-<div>NEM:NEM</div>
-<div>Point interpolation:点插值</div>
-<div>PIM:PIM</div>
-<div>Boundary element:边界元</div>
-<div>BEM:BEM</div>
-<div>Boundary integral:边界积分</div>
-<div>Green's function:Green函数</div>
-<div>Fundamental solution:基本解</div>
-<div>Singular integrals:奇异积分</div>
-<div>Regularization:正则化</div>
-<div>Hypersingular:超奇异</div>
-<div>Weakly singular:弱奇异</div>
-<div>Nearly singular:近奇异</div>
-<div>Fast multipole:快速多极</div>
-<div>FMM:FMM</div>
-<div>Hierarchical matrices:层次矩阵</div>
-<div>H-matrices:H-矩阵</div>
-<div>H²-matrices:H²-矩阵</div>
-<div>Low-rank approximation:低秩近似</div>
-<div>Adaptive cross approximation:自适应交叉近似</div>
-<div>ACA:ACA</div>
-<div>Singular value decomposition:奇异值分解</div>
-<div>SVD:SVD</div>
-<div>Truncated SVD:截断SVD</div>
-<div>Randomized SVD:随机SVD</div>
-<div>Sketching:草图</div>
-<div>Random projections:随机投影</div>
-<div>Johnson-Lindenstrauss:Johnson-Lindenstrauss引理</div>
-<div>Dimensionality reduction:降维</div>
-<div>Compressed sensing:压缩感知</div>
-<div>Matrix completion:矩阵补全</div>
-<div>Low-rank matrix recovery:低秩矩阵恢复</div>
-<div>Nuclear norm:核范数</div>
-<div>Trace norm:迹范数</div>
-<div>Schatten norm:Schatten范数</div>
-<div>Operator norm:算子范数</div>
-<div>Spectral norm:谱范数</div>
-<div>Frobenius norm:Frobenius范数</div>
-<div>Max norm:最大范数</div>
-<div>Entry-wise norm:逐元素范数</div>
-<div>Infinity norm:无穷范数</div>
-<div>One norm:1-范数</div>
-<div>Two norm:2-范数</div>
-<div>p-norm:p-范数</div>
-<div>Lp spaces:Lp空间</div>
-<div>Hölder inequality:Hölder不等式</div>
-<div>Minkowski inequality:Minkowski不等式</div>
-<div>Young inequality:Young不等式</div>
-<div>Cauchy-Schwarz:Cauchy-Schwarz不等式</div>
-<div>Triangle inequality:三角不等式</div>
-<div>Reverse triangle:逆三角不等式</div>
-<div>Parallelogram law:平行四边形法则</div>
-<div>Polarization identity:极化恒等式</div>
-<div>Inner product:内积</div>
-<div>Dot product:点积</div>
-<div>Cross product:叉积</div>
-<div>Wedge product:楔积</div>
-<div>Exterior product:外积</div>
-<div>Tensor product:张量积</div>
-<div>Kronecker product:Kronecker积</div>
-<div>Hadamard product:Hadamard积</div>
-<div>Schur product:Schur积</div>
-<div>Element-wise product:逐元素积</div>
-<div>Matrix multiplication:矩阵乘法</div>
-<div>Matrix-vector product:矩阵-向量积</div>
-<div>Matrix-matrix product:矩阵-矩阵积</div>
-<div>Outer product:外积</div>
-<div>Rank-one update:秩一更新</div>
-<div>Sherman-Morrison:Sherman-Morrison公式</div>
-<div>Woodbury identity:Woodbury恒等式</div>
-<div>Matrix inversion lemma:矩阵求逆引理</div>
-<div>Schur complement:Schur补</div>
-<div>Block matrix inversion:分块矩阵求逆</div>
-<div>Determinant:行列式</div>
-<div>Trace:迹</div>
-<div>Eigenvalues:本征值</div>
-<div>Eigenvectors:本征向量</div>
-<div>Eigendecomposition:本征分解</div>
-<div>Spectral decomposition:谱分解</div>
-<div>Diagonalization:对角化</div>
-<div>Jordan normal form:Jordan标准形</div>
-<div>Schur decomposition:Schur分解</div>
-<div>QR decomposition:QR分解</div>
-<div>LU decomposition:LU分解</div>
-<div>Cholesky decomposition:Cholesky分解</div>
-<div>Polar decomposition:极分解</div>
-<div>Singular value decomposition:奇异值分解</div>
-<div>Generalized eigenvalue:广义本征值</div>
-<div>Generalized SVD:广义SVD</div>
-<div>CS decomposition:CS分解</div>
-<div>Takagi factorization:Takagi因子化</div>
-<div>Autonne-Takagi:Autonne-Takagi分解</div>
-<div>Symmetric eigenvalue:对称本征值</div>
-<div>Hermitian eigenvalue:Hermitian本征值</div>
-<div>Positive definite:正定</div>
-<div>Positive semidefinite:半正定</div>
-<div>Negative definite:负定</div>
-<div>Negative semidefinite:半负定</div>
-<div>Indefinite:不定</div>
-<div>Sylvester criterion:Sylvester准则</div>
-<div>Leading principal minors:顺序主子式</div>
-<div>Gershgorin circle:Gershgorin圆盘</div>
-<div>Eigenvalue bounds:本征值界</div>
-<div>Weyl inequalities:Weyl不等式</div>
-<div>Courant-Fischer:Courant-Fischer定理</div>
-<div>Min-max theorem:极小极大定理</div>
-<div>Rayleigh quotient:Rayleigh商</div>
-<div>Power method:幂法</div>
-<div>Inverse power method:逆幂法</div>
-<div>Shifted inverse power:移位逆幂法</div>
-<div>Rayleigh quotient iteration:Rayleigh商迭代</div>
-<div>Arnoldi iteration:Arnoldi迭代</div>
-<div>Lanczos algorithm:Lanczos算法</div>
-<div>Krylov subspace:Krylov子空间</div>
-<div>Conjugate gradient:共轭梯度</div>
-<div>CG:CG</div>
-<div>Preconditioned CG:预条件CG</div>
-<div>PCG:PCG</div>
-<div>GMRES:GMRES</div>
-<div>Generalized minimal residual:广义最小残差</div>
-<div>BiCG:BiCG</div>
-<div>Biconjugate gradient:双共轭梯度</div>
-<div>BiCGSTAB:BiCGSTAB</div>
-<div>QMR:QMR</div>
-<div>Quasi-minimal residual:拟最小残差</div>
-<div>MINRES:MINRES</div>
-<div>Minimal residual:最小残差</div>
-<div>SYMMLQ:SYMMLQ</div>
-<div>Symmetric LQ:对称LQ</div>
-<div>LSQR:LSQR</div>
-<div>Least squares QR:最小二乘QR</div>
-<div>LSMR:LSMR</div>
-<div>Least squares minimal residual:最小二乘最小残差</div>
-<div>Iterative refinement:迭代精化</div>
-<div>Residual:残差</div>
-<div>Backward error:后向误差</div>
-<div>Forward error:前向误差</div>
-<div>Condition number:条件数</div>
-<div>Ill-conditioned:病态</div>
-<div>Well-conditioned:良态</div>
-<div>Numerical stability:数值稳定性</div>
-<div>Backward stability:后向稳定</div>
-<div>Forward stability:前向稳定</div>
-<div>Mixed stability:混合稳定</div>
-<div>Rounding error:舍入误差</div>
-<div>Truncation error:截断误差</div>
-<div>Discretization error:离散化误差</div>
-<div>Approximation error:近似误差</div>
-<div>Interpolation error:插值误差</div>
-<div>Quadrature error:求积误差</div>
-<div>Integration error:积分误差</div>
-<div>Differentiation error:微分误差</div>
-<div>Finite difference error:有限差分误差</div>
-<div>Consistency:相容性</div>
-<div>Stability:稳定性</div>
-<div>Convergence:收敛性</div>
-<div>Lax equivalence:Lax等价定理</div>
-<div>CFL condition:CFL条件</div>
-<div>Courant-Friedrichs-Lewy:Courant-Friedrichs-Lewy</div>
-<div>Von Neumann stability:Von Neumann稳定性</div>
-<div>Fourier analysis:Fourier分析</div>
-<div>Amplification factor:放大因子</div>
-<div>Phase error:相位误差</div>
-<div>Dispersion error:色散误差</div>
-<div>Dissipation error:耗散误差</div>
-<div>Numerical diffusion:数值扩散</div>
-<div>Numerical dispersion:数值色散</div>
-<div>Artificial viscosity:人工粘性</div>
-<div>Upwinding:迎风</div>
-<div>Flux limiters:通量限制器</div>
-<div>TVD schemes:TVD格式</div>
-<div>Total variation diminishing:总变差递减</div>
-<div>ENO schemes:ENO格式</div>
-<div>Essentially non-oscillatory:本质无振荡</div>
-<div>WENO schemes:WENO格式</div>
-<div>Weighted ENO:加权ENO</div>
-<div>High-resolution schemes:高分辨率格式</div>
-<div>Monotonicity-preserving:保单调</div>
-<div>Positivity-preserving:保正</div>
-<div>Maximum principle:最大值原理</div>
-<div>Discrete maximum principle:离散最大值原理</div>
-<div>M-matrix:M-矩阵</div>
-<div>Z-matrix:Z-矩阵</div>
-<div>Inverse-positive:逆正</div>
-<div>Diagonally dominant:对角占优</div>
-<div>Strictly diagonally dominant:严格对角占优</div>
-<div>Irreducibly diagonally:不可约对角占优</div>
-<div>Gershgorin theorem:Gershgorin定理</div>
-<div>Perron-Frobenius:Perron-Frobenius定理</div>
-<div>Nonnegative matrices:非负矩阵</div>
-<div>Primitive matrices:本原矩阵</div>
-<div>Irreducible matrices:不可约矩阵</div>
-<div>Reducible matrices:可约矩阵</div>
-<div>Stochastic matrices:随机矩阵</div>
-<div>Doubly stochastic:双随机矩阵</div>
-<div>Markov matrices:Markov矩阵</div>
-<div>Transition matrices:转移矩阵</div>
-<div>Stationary distribution:平稳分布</div>
-<div>Ergodic theorem:遍历定理</div>
-<div>Mixing time:混合时间</div>
-<div>Spectral gap:谱间隙</div>
-<div>Second eigenvalue:第二本征值</div>
-<div>Cheeger inequality:Cheeger不等式</div>
-<div>Conductance:电导</div>
-<div>Expansion:扩张</div>
-<div>Isoperimetric inequality:等周不等式</div>
-<div>Vertex expansion:顶点扩张</div>
-<div>Edge expansion:边扩张</div>
-<div>Expander graphs:扩张图</div>
-<div>Ramanujan graphs:Ramanujan图</div>
-<div>Spectral graph theory:谱图论</div>
-<div>Laplacian matrix:Laplacian矩阵</div>
-<div>Adjacency matrix:邻接矩阵</div>
-<div>Incidence matrix:关联矩阵</div>
-<div>Degree matrix:度矩阵</div>
-<div>Normalized Laplacian:归一化Laplacian</div>
-<div>Random walk Laplacian:随机游走Laplacian</div>
-<div>Graph Fourier transform:图Fourier变换</div>
-<div>Graph signal processing:图信号处理</div>
-<div>Graph wavelets:图小波</div>
-<div>Spectral clustering:谱聚类</div>
-<div>Normalized cuts:归一化割</div>
-<div>Ratio cuts:比率割</div>
-<div>Min-cut:最小割</div>
-<div>Max-flow:最大流</div>
-<div>Ford-Fulkerson:Ford-Fulkerson算法</div>
-<div>Edmonds-Karp:Edmonds-Karp算法</div>
-<div>Dinic algorithm:Dinic算法</div>
-<div>Push-relabel:推送-重标记</div>
-<div>Preflow-push:预流推送</div>
-<div>Network flows:网络流</div>
-<div>Minimum cost flow:最小费用流</div>
-<div>Circulation:环流</div>
-<div>Matching:匹配</div>
-<div>Maximum matching:最大匹配</div>
-<div>Perfect matching:完美匹配</div>
-<div>Bipartite matching:二部匹配</div>
-<div>Hungarian algorithm:匈牙利算法</div>
-<div>Kuhn-Munkres:Kuhn-Munkres算法</div>
-<div>Hopcroft-Karp:Hopcroft-Karp算法</div>
-<div>Blossom algorithm:花算法</div>
-<div>Edmonds algorithm:Edmonds算法</div>
-<div>Stable matching:稳定匹配</div>
-<div>Gale-Shapley:Gale-Shapley算法</div>
-<div>Deferred acceptance:延迟接受</div>
-<div>Marriage problem:婚姻问题</div>
-<div>College admissions:大学录取</div>
-<div>Kidney exchange:肾脏交换</div>
-<div>Market design:市场设计</div>
-<div>Mechanism design:机制设计</div>
-<div>Auction theory:拍卖理论</div>
-<div>Vickrey auction:Vickrey拍卖</div>
-<div>Second-price auction:第二价格拍卖</div>
-<div>First-price auction:第一价格拍卖</div>
-<div>English auction:英式拍卖</div>
-<div>Dutch auction:荷兰式拍卖</div>
-<div>Sealed-bid auction:密封拍卖</div>
-<div>Combinatorial auction:组合拍卖</div>
-<div>Incentive compatibility:激励相容</div>
-<div>Truthfulness:真实性</div>
-<div>Strategy-proofness:防策略</div>
-<div>Dominant strategy:占优策略</div>
-<div>Nash equilibrium:Nash均衡</div>
-<div>Bayesian Nash:Bayesian Nash均衡</div>
-<div>Perfect Bayesian:完美Bayesian均衡</div>
-<div>Sequential equilibrium:序贯均衡</div>
-<div>Subgame perfect:子博弈完美</div>
-<div>Trembling hand:颤抖手</div>
-<div>Proper equilibrium:真均衡</div>
-<div>Correlated equilibrium:相关均衡</div>
-<div>Coarse correlated:粗相关均衡</div>
-<div>Evolutionarily stable:进化稳定策略</div>
-<div>ESS:ESS</div>
-<div>Replicator dynamics:复制者动力学</div>
-<div>Evolutionary game theory:进化博弈论</div>
-<div>Population games:种群博弈</div>
-<div>Mean field games:平均场博弈</div>
-<div>Potential games:势博弈</div>
-<div>Congestion games:拥塞博弈</div>
-<div>Network games:网络博弈</div>
-<div>Graphical games:图博弈</div>
-<div>Cooperative games:合作博弈</div>
-<div>Coalitional games:联盟博弈</div>
-<div>Shapley value:Shapley值</div>
-<div>Core:核心</div>
-<div>Nucleolus:核仁</div>
-<div>Bargaining:讨价还价</div>
-<div>Nash bargaining:Nash讨价还价</div>
-<div>Rubinstein bargaining:Rubinstein讨价还价</div>
-<div>Alternating offers:交替出价</div>
-<div>Ultimatum game:最后通牒博弈</div>
-<div>Dictator game:独裁者博弈</div>
-<div>Public goods game:公共品博弈</div>
-<div>Prisoner's dilemma:囚徒困境</div>
-<div>Repeated games:重复博弈</div>
-<div>Folk theorem:民间定理</div>
-<div>Trigger strategies:触发策略</div>
-<div>Grim trigger:严厉触发</div>
-<div>Tit-for-tat:以牙还牙</div>
-<div>Forgiving strategies:宽恕策略</div>
-<div>Stochastic games:随机博弈</div>
-<div>Markov games:Markov博弈</div>
-<div>Differential games:微分博弈</div>
-<div>Pursuit-evasion:追逃</div>
-<div>Zero-sum games:零和博弈</div>
-<div>Minimax theorem:极小极大定理</div>
-<div>Von Neumann:Von Neumann定理</div>
-<div>Linear programming:线性规划</div>
-<div>Simplex method:单纯形法</div>
-<div>Interior point:内点法</div>
-<div>Barrier methods:障碍法</div>
-<div>Primal-dual interior:原始-对偶内点</div>
-<div>Path-following:路径跟随</div>
-<div>Central path:中心路径</div>
-<div>Self-concordance:自协调</div>
-<div>Newton decrement:Newton减量</div>
-<div>Affine scaling:仿射缩放</div>
-<div>Projective scaling:投影缩放</div>
-<div>Karmarkar algorithm:Karmarkar算法</div>
-<div>Ellipsoid method:椭球法</div>
-<div>Cutting plane:割平面</div>
-<div>Column generation:列生成</div>
-<div>Dantzig-Wolfe:Dantzig-Wolfe分解</div>
-<div>Benders decomposition:Benders分解</div>
-<div>Branch and bound:分支定界</div>
-<div>Branch and cut:分支割平面</div>
-<div>Branch and price:分支定价</div>
-<div>Integer programming:整数规划</div>
-<div>Mixed integer:混合整数规划</div>
-<div>MIP:MIP</div>
-</script>
-</body></html>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 初始化场景、相机和渲染器
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0a0a, 0.002);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 50;
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // 鼠标位置追踪
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+        
+        // 创建复杂的几何体组
+        const geometryGroup = new THREE.Group();
+        
+        // 中心主体 - 复杂的多面体
+        const icosahedronGeometry = new THREE.IcosahedronGeometry(8, 1);
+        const icosahedronMaterial = new THREE.MeshPhongMaterial({
+            color: 0x00ff88,
+            wireframe: false,
+            emissive: 0x00ff88,
+            emissiveIntensity: 0.2,
+            shininess: 100
+        });
+        const icosahedron = new THREE.Mesh(icosahedronGeometry, icosahedronMaterial);
+        icosahedron.castShadow = true;
+        geometryGroup.add(icosahedron);
+        
+        // 环绕的立方体
+        const cubes = [];
+        for (let i = 0; i < 8; i++) {
+            const cubeGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const cubeMaterial = new THREE.MeshPhongMaterial({
+                color: Math.random() * 0xffffff,
+                emissive: Math.random() * 0x444444,
+                shininess: 80
+            });
+            const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+            
+            const angle = (i / 8) * Math.PI * 2;
+            cube.position.x = Math.cos(angle) * 20;
+            cube.position.y = Math.sin(angle) * 20;
+            cube.position.z = Math.sin(angle * 2) * 10;
+            
+            cube.castShadow = true;
+            cube.receiveShadow = true;
+            cubes.push(cube);
+            geometryGroup.add(cube);
+        }
+        
+        // 环形结构
+        const torusGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
+        const torusMaterial = new THREE.MeshPhongMaterial({
+            color: 0xff6b6b,
+            wireframe: true,
+            emissive: 0xff6b6b,
+            emissiveIntensity: 0.3
+        });
+        const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+        torus.rotation.x = Math.PI / 4;
+        geometryGroup.add(torus);
+        
+        // 第二个环形
+        const torus2 = new THREE.Mesh(
+            new THREE.TorusGeometry(18, 1.5, 16, 100),
+            new THREE.MeshPhongMaterial({
+                color: 0x00d4ff,
+                wireframe: true,
+                emissive: 0x00d4ff,
+                emissiveIntensity: 0.3
+            })
+        );
+        torus2.rotation.y = Math.PI / 3;
+        geometryGroup.add(torus2);
+        
+        scene.add(geometryGroup);
+        
+        // 粒子系统
+        const particleCount = 5000;
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        const particleColors = new Float32Array(particleCount * 3);
+        const particleVelocities = [];
+        
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i * 3] = (Math.random() - 0.5) * 200;
+            particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 200;
+            particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+            
+            const color = new THREE.Color();
+            color.setHSL(Math.random(), 1.0, 0.5);
+            particleColors[i * 3] = color.r;
+            particleColors[i * 3 + 1] = color.g;
+            particleColors[i * 3 + 2] = color.b;
+            
+            particleVelocities.push({
+                x: (Math.random() - 0.5) * 0.1,
+                y: (Math.random() - 0.5) * 0.1,
+                z: (Math.random() - 0.5) * 0.1
+            });
+        }
+        
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+        
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particleSystem);
+        
+        // 光照系统
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        const pointLight1 = new THREE.PointLight(0x00ff88, 2, 100);
+        pointLight1.position.set(20, 20, 20);
+        pointLight1.castShadow = true;
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(0xff6b6b, 2, 100);
+        pointLight2.position.set(-20, -20, 20);
+        pointLight2.castShadow = true;
+        scene.add(pointLight2);
+        
+        const pointLight3 = new THREE.PointLight(0x00d4ff, 2, 100);
+        pointLight3.position.set(0, 20, -20);
+        scene.add(pointLight3);
+        
+        // 动态光源
+        const movingLight = new THREE.PointLight(0xffaa00, 3, 50);
+        scene.add(movingLight);
+        
+        // 鼠标事件监听
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            document.getElementById('mouse-x').textContent = event.clientX;
+            document.getElementById('mouse-y').textContent = event.clientY;
+        });
+        
+        // 点击改变颜色
+        document.addEventListener('click', () => {
+            icosahedronMaterial.color.setHex(Math.random() * 0xffffff);
+            icosahedronMaterial.emissive.setHex(Math.random() * 0x444444);
+            
+            cubes.forEach(cube => {
+                cube.material.color.setHex(Math.random() * 0xffffff);
+            });
+        });
+        
+        // 滚轮缩放
+        document.addEventListener('wheel', (event) => {
+            camera.position.z += event.deltaY * 0.05;
+            camera.position.z = Math.max(20, Math.min(100, camera.position.z));
+        });
+        
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // FPS 计数器
+        let lastTime = performance.now();
+        let frames = 0;
+        
+        // 动画循环
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            
+            // 平滑相机移动
+            targetX = mouseX * 30;
+            targetY = mouseY * 30;
+            camera.position.x += (targetX - camera.position.x) * 0.05;
+            camera.position.y += (targetY - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            
+            // 旋转主几何体组
+            geometryGroup.rotation.x += 0.002;
+            geometryGroup.rotation.y += 0.003;
+            
+            // 旋转中心多面体
+            icosahedron.rotation.x += 0.01;
+            icosahedron.rotation.y += 0.01;
+            
+            // 动画立方体
+            cubes.forEach((cube, i) => {
+                const angle = (i / 8) * Math.PI * 2 + time;
+                cube.position.x = Math.cos(angle) * 20;
+                cube.position.y = Math.sin(angle) * 20;
+                cube.position.z = Math.sin(angle * 2) * 10;
+                
+                cube.rotation.x += 0.02;
+                cube.rotation.y += 0.02;
+                
+                // 根据鼠标位置缩放
+                const scale = 1 + Math.sin(time * 2 + i) * 0.3;
+                cube.scale.set(scale, scale, scale);
+            });
+            
+            // 旋转环形
+            torus.rotation.x += 0.005;
+            torus.rotation.y += 0.003;
+            torus2.rotation.y += 0.007;
+            torus2.rotation.z += 0.002;
+            
+            // 更新粒子
+            const positions = particlesGeometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] += particleVelocities[i].x;
+                positions[i * 3 + 1] += particleVelocities[i].y;
+                positions[i * 3 + 2] += particleVelocities[i].z;
+                
+                // 边界检测
+                if (Math.abs(positions[i * 3]) > 100) particleVelocities[i].x *= -1;
+                if (Math.abs(positions[i * 3 + 1]) > 100) particleVelocities[i].y *= -1;
+                if (Math.abs(positions[i * 3 + 2]) > 100) particleVelocities[i].z *= -1;
+                
+                // 受鼠标影响
+                const dx = positions[i * 3] - targetX;
+                const dy = positions[i * 3 + 1] - targetY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 30) {
+                    positions[i * 3] += dx * 0.01;
+                    positions[i * 3 + 1] += dy * 0.01;
+                }
+            }
+            particlesGeometry.attributes.position.needsUpdate = true;
+            
+            // 旋转粒子系统
+            particleSystem.rotation.y += 0.001;
+            
+            // 移动动态光源
+            movingLight.position.x = Math.sin(time) * 30;
+            movingLight.position.y = Math.cos(time * 1.5) * 30;
+            movingLight.position.z = Math.sin(time * 0.7) * 30;
+            
+            // 更新信息面板
+            const angle = Math.atan2(camera.position.y, camera.position.x) * (180 / Math.PI);
+            document.getElementById('camera-angle').textContent = angle.toFixed(1) + '°';
+            document.getElementById('rotation-speed').textContent = (1 + Math.abs(mouseX)).toFixed(2) + 'x';
+            
+            // FPS 计数
+            frames++;
+            const currentTime = performance.now();
+            if (currentTime >= lastTime + 1000) {
+                document.getElementById('fps').textContent = frames;
+                frames = 0;
+                lastTime = currentTime;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
