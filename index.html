@@ -3,22 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <style>
-*{margin:0;padding:0;overflow:hidden}body{background:#000}canvas{display:block}#覆盖层{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'SimSun',serif;color:#0ff;font-size:12px;line-height:1.6;text-shadow:0 0 10px #0ff;padding:10px;box-sizing:border-box;z-index:1000}
+*{margin:0;padding:0;overflow:hidden}body{background:#000}canvas{display:block}#覆盖层{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'SimSun',serif;color:#0ff;font-size:11px;line-height:1.4;text-shadow:0 0 8px #0ff,0 0 15px #0ff;padding:8px;box-sizing:border-box;z-index:1000;columns:3;column-gap:15px}#覆盖层 div{break-inside:avoid;margin-bottom:2px;transition:all 0.3s;opacity:0.85}#覆盖层 div:hover{opacity:1;text-shadow:0 0 20px #0ff}
 </style>
 </head>
 <body>
 <div id="覆盖层"></div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script>
-console.log("[v0] 初始化开始");
-const φ=1.618033988749895,τ=6.283185307179586,π=3.141592653589793,黄金角=137.5077640500378*π/180;
-let 场景,相机,渲染器,螺旋组,鼠标X=0,鼠标Y=0,目标X=0,目标Y=0,覆盖层元素;
+const φ=1.618033988749895,τ=6.283185307179586,π=3.141592653589793,黄金角=137.5077640500378*π/180,欧拉=2.718281828459045;
+let 场景,相机,渲染器,螺旋组,粒子系统=[],鼠标X=0,鼠标Y=0,目标X=0,目标Y=0,覆盖层元素,时钟=0,波动组,分形组,轨迹数组=[];
 
 const 计算斐波那契=(n)=>{if(n<=1)return n;let a=0,b=1;for(let i=2;i<=n;i++){let t=a+b;a=b;b=t}return b};
+const 复数乘法=(a,b,c,d)=>[a*c-b*d,a*d+b*c];
+const 曼德布洛特=(x,y,迭代)=>{let zx=0,zy=0,i=0;while(zx*zx+zy*zy<4&&i<迭代){let t=zx*zx-zy*zy+x;zy=2*zx*zy+y;zx=t;i++}return i};
+const 傅里叶系数=(n,t)=>Math.cos(n*t)/n+Math.sin(n*t)/(n*n);
 
 const 初始化=()=>{
-  console.log("[v0] 创建场景");
   场景=new THREE.Scene();
+  场景.fog=new THREE.FogExp2(0x000000,0.0008);
   相机=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,10000);
   相机.position.set(0,0,500);
   
@@ -26,106 +28,241 @@ const 初始化=()=>{
   渲染器.setSize(window.innerWidth,window.innerHeight);
   渲染器.setClearColor(0x000000,1);
   document.body.appendChild(渲染器.domElement);
-  console.log("[v0] 渲染器已添加");
   
   覆盖层元素=document.getElementById('覆盖层');
   螺旋组=new THREE.Group();
+  波动组=new THREE.Group();
+  分形组=new THREE.Group();
   场景.add(螺旋组);
+  场景.add(波动组);
+  场景.add(分形组);
   
-  const 环境光=new THREE.AmbientLight(0x404040,3);
+  const 环境光=new THREE.AmbientLight(0x202020,2);
   场景.add(环境光);
   
-  const 点光源1=new THREE.PointLight(0x00ffff,3,2000);
-  点光源1.position.set(300,300,300);
-  场景.add(点光源1);
-  
-  const 点光源2=new THREE.PointLight(0xff00ff,3,2000);
-  点光源2.position.set(-300,-300,300);
-  场景.add(点光源2);
-  
-  const 点光源3=new THREE.PointLight(0xffff00,2,2000);
-  点光源3.position.set(0,300,-300);
-  场景.add(点光源3);
+  for(let i=0;i<8;i++){
+    const 光=new THREE.PointLight(new THREE.Color().setHSL(i/8,1,0.5),2,1500);
+    光.position.set(Math.cos(i*τ/8)*400,Math.sin(i*τ/8)*400,Math.cos(i*τ/16)*300);
+    场景.add(光);
+    光.userData={角度:i*τ/8};
+  }
   
   生成斐波那契螺旋();
-  console.log("[v0] 螺旋已生成");
+  生成粒子系统();
+  生成波动场();
+  生成分形结构();
   
   document.addEventListener('mousemove',鼠标移动);
+  document.addEventListener('click',鼠标点击);
   window.addEventListener('resize',窗口调整);
   
   动画循环();
-  console.log("[v0] 动画循环已启动");
 };
 
 const 生成斐波那契螺旋=()=>{
-  const 点数组=[],迭代次数=1500,缩放因子=0.6;
+  const 点数组=[],迭代次数=2500,缩放因子=0.5;
   
   for(let i=0;i<迭代次数;i++){
-    const θ=i*黄金角,r=缩放因子*Math.sqrt(i),x=r*Math.cos(θ),y=r*Math.sin(θ),z=i*0.12-180;
+    const θ=i*黄金角,r=缩放因子*Math.sqrt(i)*Math.pow(φ,i/1000),x=r*Math.cos(θ),y=r*Math.sin(θ),z=i*0.15-300+Math.sin(i*0.05)*20;
     点数组.push(new THREE.Vector3(x,y,z));
   }
   
-  const 曲线=new THREE.CatmullRomCurve3(点数组);
-  const 管道几何=new THREE.TubeGeometry(曲线,点数组.length*2,0.4,8,false);
-  const 材质1=new THREE.MeshPhongMaterial({
-    color:0x00ffff,
-    emissive:0x004444,
-    shininess:100,
-    transparent:true,
-    opacity:0.9
-  });
-  const 网格1=new THREE.Mesh(管道几何,材质1);
-  螺旋组.add(网格1);
-  
-  for(let i=0;i<迭代次数;i+=8){
-    const 点=点数组[i];
-    const 球体几何=new THREE.SphereGeometry(1.2+Math.sin(i*0.1)*0.6,12,12);
-    const 色相=i/迭代次数;
-    const 材质=new THREE.MeshPhongMaterial({
-      color:new THREE.Color().setHSL(色相,1,0.6),
-      emissive:new THREE.Color().setHSL(色相,1,0.3),
-      shininess:100
+  for(let 层=0;层<5;层++){
+    const 层点数组=点数组.map((p,i)=>{
+      const 角度偏移=层*τ/5;
+      const 半径缩放=1-层*0.15;
+      const θ=Math.atan2(p.y,p.x)+角度偏移;
+      const r=Math.sqrt(p.x*p.x+p.y*p.y)*半径缩放;
+      return new THREE.Vector3(r*Math.cos(θ),r*Math.sin(θ),p.z+层*50);
     });
-    const 球体=new THREE.Mesh(球体几何,材质);
-    球体.position.copy(点);
-    球体.userData={索引:i};
-    螺旋组.add(球体);
+    
+    const 曲线=new THREE.CatmullRomCurve3(层点数组);
+    const 管道几何=new THREE.TubeGeometry(曲线,层点数组.length*3,0.3+层*0.1,6,false);
+    const 材质=new THREE.MeshPhongMaterial({
+      color:new THREE.Color().setHSL(层/5,1,0.5),
+      emissive:new THREE.Color().setHSL(层/5,1,0.2),
+      shininess:100,
+      transparent:true,
+      opacity:0.7-层*0.1,
+      wireframe:层%2===0
+    });
+    const 网格=new THREE.Mesh(管道几何,材质);
+    网格.userData={层:层};
+    螺旋组.add(网格);
   }
   
-  const 线几何=new THREE.BufferGeometry().setFromPoints(点数组);
-  const 线材质=new THREE.LineBasicMaterial({
-    color:0xff00ff,
-    transparent:true,
-    opacity:0.4
-  });
-  const 线=new THREE.Line(线几何,线材质);
-  螺旋组.add(线);
-  
-  for(let j=0;j<4;j++){
-    const 偏移角=j*τ/4;
-    const 额外点数组=[];
-    for(let i=0;i<迭代次数;i+=3){
-      const θ=i*黄金角+偏移角;
-      const r=缩放因子*Math.sqrt(i)*φ*0.7;
-      const x=r*Math.cos(θ);
-      const y=r*Math.sin(θ);
-      const z=i*0.12-180+j*30;
-      额外点数组.push(new THREE.Vector3(x,y,z));
-    }
-    const 额外线几何=new THREE.BufferGeometry().setFromPoints(额外点数组);
-    const 额外线材质=new THREE.LineBasicMaterial({
-      color:new THREE.Color().setHSL(j/4,0.8,0.5),
+  for(let i=0;i<迭代次数;i+=5){
+    const 点=点数组[i];
+    const 大小=0.8+Math.sin(i*0.1)*0.4+Math.cos(i*0.05)*0.3;
+    const 几何=i%3===0?new THREE.OctahedronGeometry(大小,0):new THREE.TetrahedronGeometry(大小,0);
+    const 色相=(i/迭代次数+时钟*0.1)%1;
+    const 材质=new THREE.MeshPhongMaterial({
+      color:new THREE.Color().setHSL(色相,1,0.6),
+      emissive:new THREE.Color().setHSL(色相,1,0.4),
+      shininess:100,
       transparent:true,
-      opacity:0.25
+      opacity:0.9
     });
-    const 额外线=new THREE.Line(额外线几何,额外线材质);
-    螺旋组.add(额外线);
+    const 网格=new THREE.Mesh(几何,材质);
+    网格.position.copy(点);
+    网格.userData={索引:i,初始位置:点.clone(),相位:Math.random()*τ};
+    螺旋组.add(网格);
+  }
+};
+
+const 生成粒子系统=()=>{
+  for(let 系统=0;系统<12;系统++){
+    const 粒子数=800;
+    const 几何=new THREE.BufferGeometry();
+    const 位置=new Float32Array(粒子数*3);
+    const 颜色=new Float32Array(粒子数*3);
+    const 大小=new Float32Array(粒子数);
+    
+    for(let i=0;i<粒子数;i++){
+      const θ=Math.random()*τ;
+      const φ角=Math.random()*π;
+      const r=Math.random()*600+100;
+      位置[i*3]=r*Math.sin(φ角)*Math.cos(θ);
+      位置[i*3+1]=r*Math.sin(φ角)*Math.sin(θ);
+      位置[i*3+2]=r*Math.cos(φ角)-200;
+      
+      const 色相=(系统/12+Math.random()*0.1)%1;
+      const 颜色对象=new THREE.Color().setHSL(色相,1,0.6);
+      颜色[i*3]=颜色对象.r;
+      颜色[i*3+1]=颜色对象.g;
+      颜色[i*3+2]=颜色对象.b;
+      
+      大小[i]=Math.random()*3+1;
+    }
+    
+    几何.setAttribute('position',new THREE.BufferAttribute(位置,3));
+    几何.setAttribute('color',new THREE.BufferAttribute(颜色,3));
+    几何.setAttribute('size',new THREE.BufferAttribute(大小,1));
+    
+    const 材质=new THREE.PointsMaterial({
+      size:2,
+      vertexColors:true,
+      transparent:true,
+      opacity:0.6,
+      blending:THREE.AdditiveBlending,
+      sizeAttenuation:true
+    });
+    
+    const 粒子=new THREE.Points(几何,材质);
+    粒子.userData={系统:系统,速度:0.5+Math.random()*1.5,相位:Math.random()*τ};
+    场景.add(粒子);
+    粒子系统.push(粒子);
+  }
+};
+
+const 生成波动场=()=>{
+  const 分辨率=60;
+  const 大小=800;
+  const 几何=new THREE.PlaneGeometry(大小,大小,分辨率,分辨率);
+  const 位置=几何.attributes.position;
+  
+  for(let i=0;i<位置.count;i++){
+    const x=位置.getX(i);
+    const y=位置.getY(i);
+    const 距离=Math.sqrt(x*x+y*y);
+    const z=Math.sin(距离*0.02)*20;
+    位置.setZ(i,z);
+  }
+  
+  const 材质=new THREE.MeshPhongMaterial({
+    color:0x00ffff,
+    emissive:0x003333,
+    wireframe:true,
+    transparent:true,
+    opacity:0.3,
+    side:THREE.DoubleSide
+  });
+  
+  const 网格=new THREE.Mesh(几何,材质);
+  网格.rotation.x=-π/2;
+  网格.position.z=-400;
+  波动组.add(网格);
+  
+  const 网格2=网格.clone();
+  网格2.rotation.x=π/2;
+  网格2.position.z=200;
+  网格2.material=材质.clone();
+  网格2.material.color.setHex(0xff00ff);
+  网格2.material.emissive.setHex(0x330033);
+  波动组.add(网格2);
+};
+
+const 生成分形结构=()=>{
+  const 递归深度=4;
+  const 生成分支=(位置,大小,深度,角度)=>{
+    if(深度<=0||大小<2)return;
+    
+    const 几何=new THREE.CylinderGeometry(大小*0.3,大小*0.5,大小*8,6);
+    const 材质=new THREE.MeshPhongMaterial({
+      color:new THREE.Color().setHSL(深度/递归深度,0.8,0.5),
+      emissive:new THREE.Color().setHSL(深度/递归深度,0.8,0.2),
+      transparent:true,
+      opacity:0.6
+    });
+    const 网格=new THREE.Mesh(几何,材质);
+    网格.position.copy(位置);
+    网格.rotation.z=角度;
+    分形组.add(网格);
+    
+    const 新位置1=位置.clone().add(new THREE.Vector3(Math.cos(角度+0.5)*大小*6,Math.sin(角度+0.5)*大小*6,大小*4));
+    const 新位置2=位置.clone().add(new THREE.Vector3(Math.cos(角度-0.5)*大小*6,Math.sin(角度-0.5)*大小*6,大小*4));
+    const 新位置3=位置.clone().add(new THREE.Vector3(Math.cos(角度)*大小*7,Math.sin(角度)*大小*7,大小*5));
+    
+    生成分支(新位置1,大小*0.7,深度-1,角度+0.5);
+    生成分支(新位置2,大小*0.7,深度-1,角度-0.5);
+    生成分支(新位置3,大小*0.6,深度-1,角度);
+  };
+  
+  for(let i=0;i<6;i++){
+    const 角度=i*τ/6;
+    const 起始位置=new THREE.Vector3(Math.cos(角度)*150,Math.sin(角度)*150,-300);
+    生成分支(起始位置,3,递归深度,角度);
   }
 };
 
 const 鼠标移动=(事件)=>{
   鼠标X=(事件.clientX/window.innerWidth)*2-1;
   鼠标Y=-(事件.clientY/window.innerHeight)*2+1;
+  
+  轨迹数组.push({x:鼠标X,y:鼠标Y,时间:Date.now()});
+  if(轨迹数组.length>50)轨迹数组.shift();
+};
+
+const 鼠标点击=(事件)=>{
+  const 爆发粒子数=200;
+  const 几何=new THREE.BufferGeometry();
+  const 位置=new Float32Array(爆发粒子数*3);
+  const 速度=[];
+  
+  for(let i=0;i<爆发粒子数;i++){
+    位置[i*3]=0;
+    位置[i*3+1]=0;
+    位置[i*3+2]=0;
+    速度.push(new THREE.Vector3(
+      (Math.random()-0.5)*20,
+      (Math.random()-0.5)*20,
+      (Math.random()-0.5)*20
+    ));
+  }
+  
+  几何.setAttribute('position',new THREE.BufferAttribute(位置,3));
+  const 材质=new THREE.PointsMaterial({
+    color:new THREE.Color().setHSL(Math.random(),1,0.6),
+    size:3,
+    transparent:true,
+    opacity:1,
+    blending:THREE.AdditiveBlending
+  });
+  
+  const 爆发=new THREE.Points(几何,材质);
+  爆发.position.set(鼠标X*500,鼠标Y*500,0);
+  爆发.userData={速度:速度,生命:1,创建时间:Date.now()};
+  场景.add(爆发);
 };
 
 const 窗口调整=()=>{
@@ -135,551 +272,1564 @@ const 窗口调整=()=>{
 };
 
 const 更新方程显示=()=>{
-  const x轴=相机.position.x.toFixed(2);
-  const y轴=相机.position.y.toFixed(2);
-  const z轴=相机.position.z.toFixed(2);
-  const 旋转角=螺旋组.rotation.y;
-  const 当前斐波那契=计算斐波那契(Math.floor(Math.abs(鼠标X*20)+Math.abs(鼠标Y*20)));
-  const 黄金比例计算=Math.pow(φ,Math.abs(鼠标X+鼠标Y));
+  const x=相机.position.x.toFixed(2);
+  const y=相机.position.y.toFixed(2);
+  const z=相机.position.z.toFixed(2);
+  const 旋转=螺旋组.rotation.y;
+  const 斐波那契值=计算斐波那契(Math.floor(Math.abs(鼠标X*30)+Math.abs(鼠标Y*30)));
+  const 黄金幂=Math.pow(φ,Math.abs(鼠标X*5+鼠标Y*5));
+  const 复数模=Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y);
+  const 复数幅角=Math.atan2(鼠标Y,鼠标X);
+  const 曼德值=曼德布洛特(鼠标X*2,鼠标Y*2,50);
+  const 傅里叶和=Array.from({length:20},(_, n)=>傅里叶系数(n+1,时钟)).reduce((a,b)=>a+b,0);
+  const 波函数=Math.sin(鼠标X*10+时钟)*Math.cos(鼠标Y*10+时钟);
+  const 薛定谔能量=-(鼠标X*鼠标X+鼠标Y*鼠标Y)*0.5+Math.abs(鼠标X*鼠标Y)*10;
+  const 拉格朗日=0.5*(鼠标X*鼠标X+鼠标Y*鼠标Y)*100-Math.abs(鼠标X*鼠标Y)*50;
+  const 哈密顿=0.5*(鼠标X*鼠标X+鼠标Y*鼠标Y)*100+Math.abs(鼠标X*鼠标Y)*50;
+  const 角动量=鼠标X*鼠标Y*1000;
+  const 轨道速度=轨迹数组.length>1?Math.sqrt(Math.pow(轨迹数组[轨迹数组.length-1].x-轨迹数组[0].x,2)+Math.pow(轨迹数组[轨迹数组.length-1].y-轨迹数组[0].y,2))*100:0;
   
-  const 方程HTML=`
-<div style="columns:2;column-gap:20px;font-size:11px">
-<div>φ=(1+√5)/2=${φ.toFixed(10)}</div>
-<div>黄金角=2π(1-1/φ)=${(黄金角*180/π).toFixed(6)}°</div>
-<div>斐波那契递推:F(n)=F(n-1)+F(n-2)</div>
-<div>F(${Math.floor(Math.abs(鼠标X*20)+Math.abs(鼠标Y*20))})=${当前斐波那契}</div>
-<div>螺旋参数:r(θ)=a·e^(b·θ)</div>
-<div>x(θ)=${(Math.sqrt(Math.abs(鼠标X*10)+1)*Math.cos(旋转角)).toFixed(4)}</div>
-<div>y(θ)=${(Math.sqrt(Math.abs(鼠标Y*10)+1)*Math.sin(旋转角)).toFixed(4)}</div>
-<div>相机:(${x轴},${y轴},${z轴})</div>
-<div>φ^(|x|+|y|)=${黄金比例计算.toFixed(6)}</div>
-<div>欧拉公式:e^(iπ)+1=0</div>
-<div>z=r·e^(iθ)=${Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y).toFixed(4)}·e^(i·${Math.atan2(鼠标Y,鼠标X).toFixed(4)})</div>
-<div>黄金矩形:${(Math.abs(鼠标X)*φ).toFixed(4)}:${Math.abs(鼠标X).toFixed(4)}</div>
-<div>增长率:ln(φ)/π·2=${(Math.log(φ)/π*2).toFixed(6)}</div>
-<div>角动量:L=r×p=${(鼠标X*鼠标Y*100).toFixed(4)}</div>
-<div>拉格朗日:L=T-V</div>
-<div>哈密顿:H=${(Math.abs(鼠标X*100+鼠标Y*100)).toFixed(4)}</div>
+  覆盖层元素.innerHTML=`
+<div>φ=(1+√5)/2=${φ.toFixed(12)}</div>
+<div>τ=2π=${τ.toFixed(12)}</div>
+<div>e=${欧拉.toFixed(12)}</div>
+<div>黄金角=2π(1-1/φ)=${(黄金角*180/π).toFixed(8)}°</div>
+<div>F(${Math.floor(Math.abs(鼠标X*30)+Math.abs(鼠标Y*30))})=${斐波那契值}</div>
+<div>φ^(5|x|+5|y|)=${黄金幂.toFixed(8)}</div>
+<div>Binet公式:F(n)=(φⁿ-ψⁿ)/√5</div>
+<div>ψ=(1-√5)/2=${((1-Math.sqrt(5))/2).toFixed(12)}</div>
+<div>黄金比例极限:lim(F(n+1)/F(n))=φ</div>
+<div>连分数:φ=1+1/(1+1/(1+1/...))</div>
+<div>螺旋方程:r(θ)=ae^(bθ)</div>
+<div>对数螺旋:b=cot(α)=${(1/Math.tan(黄金角)).toFixed(8)}</div>
+<div>极坐标:r=${(Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y)*500).toFixed(4)}</div>
+<div>θ=${复数幅角.toFixed(8)}rad=${(复数幅角*180/π).toFixed(4)}°</div>
+<div>笛卡尔:(x,y,z)=(${x},${y},${z})</div>
+<div>球坐标:ρ=${Math.sqrt(parseFloat(x)**2+parseFloat(y)**2+parseFloat(z)**2).toFixed(4)}</div>
+<div>方位角:φ=${Math.atan2(parseFloat(y),parseFloat(x)).toFixed(6)}</div>
+<div>极角:θ=${Math.acos(parseFloat(z)/Math.sqrt(parseFloat(x)**2+parseFloat(y)**2+parseFloat(z)**2)).toFixed(6)}</div>
+<div>柱坐标:(ρ,φ,z)=(${Math.sqrt(parseFloat(x)**2+parseFloat(y)**2).toFixed(4)},${Math.atan2(parseFloat(y),parseFloat(x)).toFixed(4)},${z})</div>
+<div>复数:z=${鼠标X.toFixed(6)}+${鼠标Y.toFixed(6)}i</div>
+<div>模:|z|=${复数模.toFixed(8)}</div>
+<div>幅角:arg(z)=${复数幅角.toFixed(8)}</div>
+<div>指数形式:z=${复数模.toFixed(6)}e^(i·${复数幅角.toFixed(6)})</div>
+<div>共轭:z̄=${鼠标X.toFixed(6)}-${Math.abs(鼠标Y).toFixed(6)}i</div>
+<div>欧拉公式:e^(iθ)=cos(θ)+i·sin(θ)</div>
+<div>e^(iπ)+1=0</div>
+<div>De Moivre:(cosθ+isinθ)ⁿ=cos(nθ)+isin(nθ)</div>
+<div>Mandelbrot迭代=${曼德值}</div>
+<div>Julia集:z←z²+c</div>
+<div>分形维数:D=${(1.5+Math.abs(鼠标X)).toFixed(6)}</div>
+<div>Hausdorff维数:d_H=${(2+Math.abs(鼠标Y)*0.5).toFixed(6)}</div>
+<div>盒计数:N(ε)∝ε^(-D)</div>
+<div>自相似性:缩放不变</div>
+<div>Koch曲线:D=log4/log3=${(Math.log(4)/Math.log(3)).toFixed(8)}</div>
+<div>Sierpinski:D=log3/log2=${(Math.log(3)/Math.log(2)).toFixed(8)}</div>
+<div>Cantor集:D=log2/log3=${(Math.log(2)/Math.log(3)).toFixed(8)}</div>
+<div>Menger海绵:D=log20/log3=${(Math.log(20)/Math.log(3)).toFixed(8)}</div>
+<div>傅里叶级数:f(t)=a₀/2+Σ(aₙcos(nωt)+bₙsin(nωt))</div>
+<div>傅里叶和(20项)=${傅里叶和.toFixed(8)}</div>
+<div>傅里叶变换:F(ω)=∫f(t)e^(-iωt)dt</div>
+<div>逆变换:f(t)=(1/2π)∫F(ω)e^(iωt)dω</div>
+<div>Parseval:∫|f(t)|²dt=∫|F(ω)|²dω</div>
+<div>卷积定理:ℱ{f*g}=ℱ{f}·ℱ{g}</div>
+<div>Dirac δ:∫δ(x)f(x)dx=f(0)</div>
+<div>Heaviside θ:dθ/dx=δ(x)</div>
+<div>Green函数:LG(x,x')=δ(x-x')</div>
+<div>波动方程:∂²ψ/∂t²=c²∇²ψ</div>
+<div>波函数:ψ(x,y,t)=${波函数.toFixed(8)}</div>
+<div>概率密度:|ψ|²=${(波函数*波函数).toFixed(8)}</div>
+<div>归一化:∫|ψ|²dV=1</div>
+<div>期望值:⟨A⟩=∫ψ*Âψdx</div>
 <div>薛定谔:iℏ∂ψ/∂t=Ĥψ</div>
-<div>波函数:ψ(r,θ)=R(r)·Θ(θ)·e^(imφ)</div>
-<div>概率密度:P(r)=${(Math.pow(Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y),2)*0.1).toFixed(6)}</div>
-<div>角频率:ω=${(旋转角*10).toFixed(4)}rad/s</div>
-<div>傅里叶:F(ω)=∫f(t)e^(-iωt)dt</div>
-<div>拉普拉斯:∇²φ=∂²φ/∂x²+∂²φ/∂y²+∂²φ/∂z²</div>
-<div>梯度:∇f=(${鼠标X.toFixed(4)},${鼠标Y.toFixed(4)},${(鼠标X+鼠标Y).toFixed(4)})</div>
-<div>散度:∇·F=${(鼠标X*2+鼠标Y*2).toFixed(4)}</div>
-<div>旋度:∇×F=(${(鼠标Y-鼠标X).toFixed(4)},${鼠标X.toFixed(4)},${(-鼠标Y).toFixed(4)})</div>
-<div>麦克斯韦:∇·E=ρ/ε₀,∇·B=0</div>
-<div>∇×E=-∂B/∂t,∇×B=μ₀J+μ₀ε₀∂E/∂t</div>
-<div>洛伦兹力:F=q(E+v×B)</div>
-<div>相对论:E²=(pc)²+(mc²)²=${Math.pow(Math.abs(鼠标X*100),2)+Math.pow(Math.abs(鼠标Y*100),2)}</div>
-<div>时空:ds²=-c²dt²+dx²+dy²+dz²</div>
-<div>史瓦西:r_s=2GM/c²=${(Math.abs(鼠标X*鼠标Y)*10).toFixed(6)}</div>
-<div>霍金辐射:T=ℏc³/(8πGMk_B)</div>
-<div>熵:S=k_B·ln(Ω)=${(Math.log(Math.abs(鼠标X*100+鼠标Y*100)+1)*1.381).toFixed(6)}</div>
-<div>配分函数:Z=Σe^(-E_i/k_BT)=${Math.exp(-Math.abs(鼠标X+鼠标Y)).toFixed(6)}</div>
-<div>自由能:F=-k_BT·ln(Z)=${(-Math.log(Math.exp(-Math.abs(鼠标X+鼠标Y)))).toFixed(6)}</div>
-<div>黎曼ζ:ζ(s)=Σ(1/n^s)</div>
-<div>伽马:Γ(n)=(n-1)!=${Math.abs(鼠标X*10).toFixed(4)}</div>
-<div>贝塞尔:J_n(x)在x=${Math.abs(鼠标X*10).toFixed(4)}</div>
-<div>勒让德:P_n(cosθ)在θ=${旋转角.toFixed(4)}</div>
-<div>球谐:Y_l^m(θ,φ)=N·P_l^m(cosθ)·e^(imφ)</div>
-<div>泊松:∇²φ=-ρ/ε₀=${(-鼠标X*鼠标Y*10).toFixed(4)}</div>
-<div>纳维-斯托克斯:ρ(∂v/∂t+v·∇v)=-∇p+μ∇²v+f</div>
-<div>连续性:∂ρ/∂t+∇·(ρv)=0</div>
-<div>伯努利:p+½ρv²+ρgh=常数</div>
-<div>雷诺数:Re=${(Math.abs(鼠标X*鼠标Y)*1000).toFixed(2)}</div>
-<div>普朗克:h=${(6.626e-34).toExponential(6)}J·s</div>
-<div>精细结构:α≈1/137.036</div>
-<div>宇宙学常数:Λ=${(Math.abs(鼠标X*鼠标Y)*1e-52).toExponential(4)}m⁻²</div>
-<div>哈勃:H₀≈70km·s⁻¹·Mpc⁻¹</div>
-<div>弗里德曼:(ȧ/a)²=8πGρ/3-k/a²</div>
-<div>度规:g_μν=diag(-1,1,1,1)</div>
-<div>测地线:d²x^μ/dτ²+Γ^μ_αβ(dx^α/dτ)(dx^β/dτ)=0</div>
-<div>爱因斯坦:R_μν-½Rg_μν+Λg_μν=8πG/c⁴·T_μν</div>
-<div>克里斯托费尔:Γ^λ_μν=½g^λσ(∂_μg_νσ+∂_νg_μσ-∂_σg_μν)</div>
-<div>里奇:R_μν=R^λ_μλν</div>
-<div>里奇标量:R=g^μνR_μν=${(鼠标X*鼠标X+鼠标Y*鼠标Y).toFixed(6)}</div>
-<div>外尔:C_αβγδ=R_αβγδ-复杂项</div>
-<div>杨-米尔斯:D_μF^μν=J^ν</div>
-<div>狄拉克:(iγ^μ∂_μ-m)ψ=0</div>
-<div>克莱因-戈登:(□+m²)φ=0</div>
-<div>路径积分:⟨x_f|e^(-iHt/ℏ)|x_i⟩=∫Dxe^(iS[x]/ℏ)</div>
-<div>费曼传播子:G(x,y)=⟨0|T{φ(x)φ(y)}|0⟩</div>
-<div>重整化群:μ∂g/∂μ=β(g)</div>
-<div>标准模型:ℒ_SM=ℒ_规范+ℒ_希格斯+ℒ_汤川</div>
-<div>超对称:δψ=εQ,δφ=ε̄ψ</div>
-<div>弦论:S=-1/(2πα')∫d²σ√(-h)h^αβ∂_αX^μ∂_βX_μ</div>
-<div>卡拉比-丘:6维紧致化</div>
-<div>全息:S≤A/(4l_P²)</div>
-<div>AdS/CFT:Z_引力[φ₀]=Z_场论[J=φ₀]</div>
-<div>纠缠熵:S=-Tr(ρ_Alnρ_A)=${(Math.abs(鼠标X+鼠标Y)*0.693).toFixed(6)}</div>
-<div>冯诺依曼:S(ρ)=-Tr(ρlogρ)</div>
-<div>保真度:F(ρ,σ)=${(Math.cos(鼠标X)*Math.cos(鼠标Y)).toFixed(6)}</div>
-<div>量子互信息:I(A:B)=S(A)+S(B)-S(AB)</div>
-<div>贝尔不等式:|E(a,b)-E(a,c)|+E(b,c)≤2</div>
-<div>CHSH:S≤2√2(量子)</div>
-<div>量子态层析:ρ=Σ_ip_i|ψ_i⟩⟨ψ_i|</div>
-<div>密度矩阵:ρ=|ψ⟩⟨ψ|</div>
-<div>布洛赫球:|ψ⟩=cos(θ/2)|0⟩+e^(iφ)sin(θ/2)|1⟩</div>
-<div>泡利矩阵:[σ_i,σ_j]=2iε_ijkσ_k</div>
-<div>海森堡:ΔxΔp≥ℏ/2=${(1.055e-34/2).toExponential(6)}</div>
-<div>时间-能量:ΔEΔt≥ℏ/2</div>
-<div>角动量:[L_i,L_j]=iℏε_ijkL_k</div>
-<div>升降:L_±=L_x±iL_y</div>
+<div>哈密顿算符:Ĥ=-ℏ²/(2m)∇²+V</div>
+<div>能量本征值:E=${薛定谔能量.toFixed(6)}eV</div>
+<div>定态:ψ(x,t)=φ(x)e^(-iEt/ℏ)</div>
+<div>时间无关:Ĥφ=Eφ</div>
+<div>谐振子:E_n=ℏω(n+1/2)</div>
+<div>零点能:E₀=ℏω/2</div>
+<div>氢原子:E_n=-13.6eV/n²</div>
+<div>Bohr半径:a₀=ℏ²/(mₑe²)=${(5.29e-11).toExponential(6)}m</div>
+<div>精细结构常数:α=e²/(4πε₀ℏc)≈1/137.036</div>
+<div>Rydberg常数:R_∞=${(1.097e7).toExponential(8)}m⁻¹</div>
+<div>Compton波长:λ_C=h/(mₑc)=${(2.426e-12).toExponential(8)}m</div>
+<div>de Broglie:λ=h/p=${(6.626e-34/Math.abs(鼠标X*1e-24+1e-25)).toExponential(8)}m</div>
+<div>不确定性:ΔxΔp≥ℏ/2</div>
+<div>能量-时间:ΔEΔt≥ℏ/2</div>
+<div>角动量:L=r×p=${角动量.toFixed(6)}ℏ</div>
+<div>量子化:[L_i,L_j]=iℏε_{ijk}L_k</div>
 <div>本征值:L²|l,m⟩=ℏ²l(l+1)|l,m⟩</div>
+<div>L_z|l,m⟩=ℏm|l,m⟩</div>
 <div>自旋:S²=ℏ²s(s+1)</div>
-<div>泡利不相容:费米子</div>
-<div>费米-狄拉克:f(E)=1/(e^((E-μ)/k_BT)+1)</div>
-<div>玻色-爱因斯坦:n(E)=1/(e^((E-μ)/k_BT)-1)</div>
-<div>普朗克:B(ν,T)=(2hν³/c²)/(e^(hν/k_BT)-1)</div>
-<div>斯特藩-玻尔兹曼:j=σT⁴</div>
-<div>维恩:λ_maxT=2.898×10⁻³m·K</div>
-<div>康普顿:λ_C=h/(mc)=${(2.426e-12).toExponential(6)}m</div>
-<div>德布罗意:λ=h/p=${(6.626e-34/Math.abs(鼠标X*1e-24+1e-24)).toExponential(6)}m</div>
-<div>精细结构分裂:ΔE=(α²mc²/2n³)</div>
-<div>兰姆位移:量子电动力学修正</div>
-<div>塞曼:ΔE=μ_BBm_j</div>
-<div>斯塔克:电场分裂</div>
-<div>拉比:Ω_R=${(Math.abs(鼠标X*1e15)).toExponential(4)}rad/s</div>
-<div>退相干:T₂=${(Math.abs(1/(鼠标X*鼠标X+0.01))*1e-6).toExponential(4)}s</div>
-<div>弛豫:T₁=${(Math.abs(1/(鼠标Y*鼠标Y+0.01))*1e-6).toExponential(4)}s</div>
-<div>量子门:F_gate=${(1-Math.abs(鼠标X*鼠标Y)*0.001).toFixed(6)}</div>
-<div>纠错阈值:p_th≈10⁻²</div>
-<div>逻辑比特:n=${Math.floor(Math.abs(鼠标X*100+鼠标Y*100))}</div>
-<div>物理比特:n=${Math.floor(Math.abs(鼠标X*1000+鼠标Y*1000))}</div>
-<div>量子体积:QV=2^${Math.floor(Math.log2(Math.abs(鼠标X*100+100)))}</div>
-<div>克利福德群:保持泡利群</div>
-<div>T门:相位π/4</div>
-<div>Toffoli:通用可逆</div>
-<div>Fredkin:受控交换</div>
-<div>量子傅里叶:QFT|j⟩=1/√NΣ_ke^(2πijk/N)|k⟩</div>
-<div>Shor:O((logN)³)</div>
-<div>Grover:O(√N)</div>
-<div>量子退火:绝热演化</div>
-<div>VQE:混合算法</div>
-<div>QAOA:参数化电路</div>
-<div>张量网络:MPS,PEPS,MERA</div>
-<div>纠缠重整化:多尺度</div>
-<div>拓扑序:长程纠缠</div>
-<div>任意子:θ=${(鼠标X*π).toFixed(6)}</div>
-<div>拓扑计算:编织操作</div>
-<div>Majorana:γ†=γ</div>
-<div>Chern数:C=${Math.floor(鼠标X*10)}</div>
-<div>贝里相位:γ=${(鼠标X*鼠标Y*π).toFixed(6)}</div>
-<div>绝热定理:缓慢演化</div>
-<div>Zeno效应:频繁测量</div>
-<div>反Zeno:加速衰变</div>
-<div>动力学解耦:脉冲序列</div>
-<div>自旋回波:π脉冲</div>
-<div>CPMG序列:Carr-Purcell</div>
-<div>魔角:θ_m=54.74°</div>
-<div>化学位移:δ=ppm</div>
-<div>J耦合:${(Math.abs(鼠标X*100)).toFixed(2)}Hz</div>
-<div>弛豫率:R₁=${(Math.abs(鼠标X*1000)).toFixed(2)}s⁻¹</div>
-<div>扩散:D=${(Math.abs(鼠标Y*1e-9)).toExponential(4)}m²/s</div>
-<div>流体力学半径:r_h=k_BT/(6πηD)</div>
-<div>斯托克斯-爱因斯坦关系</div>
-<div>布朗运动:⟨x²⟩=2Dt=${(Math.abs(鼠标X*鼠标Y*1e-12)).toExponential(4)}m²</div>
-<div>朗之万:m(dv/dt)=-γv+F(t)</div>
-<div>福克-普朗克:∂P/∂t=-∂(μP)/∂x+D∂²P/∂x²</div>
-<div>主方程:dP_n/dt=Σ_m(W_nmP_m-W_mnP_n)</div>
-<div>Kramers:k=ω_0/(2π)·e^(-ΔE/k_BT)</div>
-<div>Arrhenius:k=Ae^(-E_a/RT)</div>
-<div>过渡态:k=(k_BT/h)·e^(-ΔG‡/RT)</div>
-<div>Marcus:k_ET∝e^(-(λ+ΔG°)²/4λk_BT)</div>
-<div>Förster:k_FRET∝(R₀/r)⁶</div>
-<div>Dexter:k_Dexter∝e^(-2r/L)</div>
-<div>光合作用:Φ=${(0.95-Math.abs(鼠标X*0.1)).toFixed(4)}</div>
-<div>荧光:Φ_f=${(Math.abs(Math.cos(鼠标X))).toFixed(4)}</div>
-<div>寿命:τ=${(Math.abs(1/(鼠标X*鼠标X+1))*1e-9).toExponential(4)}s</div>
-<div>Stern-Volmer:I₀/I=1+K_SV[Q]</div>
-<div>淬灭:k_q=${(Math.abs(鼠标Y*1e10)).toExponential(4)}M⁻¹s⁻¹</div>
-<div>双光子:σ₂=${(Math.abs(鼠标X*1e-50)).toExponential(4)}cm⁴·s</div>
-<div>非线性折射:n₂=${(Math.abs(鼠标Y*1e-20)).toExponential(4)}m²/W</div>
-<div>克尔效应:Δn=n₂I</div>
-<div>自聚焦:P_cr=λ²/(2πn₀n₂)</div>
-<div>孤子:色散平衡</div>
-<div>超连续谱:宽带相干</div>
-<div>光学频率梳:f_n=f_CEO+n·f_rep</div>
-<div>载波包络:φ_CEO=${(鼠标X*τ).toFixed(6)}rad</div>
-<div>阿秒脉冲:τ=${(Math.abs(鼠标X*100)+100).toFixed(2)}as</div>
-<div>高次谐波:HHG</div>
-<div>隧穿电离:γ=${(Math.abs(鼠标Y)+0.5).toFixed(4)}</div>
-<div>强场近似:SFA</div>
-<div>三步模型:电离-加速-复合</div>
-<div>截止能量:E_cutoff=I_p+3.17U_p</div>
-<div>有质动力:U_p=${(Math.abs(鼠标X*鼠标Y*10)).toFixed(4)}eV</div>
-<div>电离势:I_p=${(13.6+Math.abs(鼠标X*10)).toFixed(4)}eV</div>
-<div>ADK速率:Ammosov-Delone-Krainov</div>
-<div>PPT理论:Perelomov-Popov-Terent'ev</div>
-<div>Coulomb修正:长程势</div>
-<div>量子轨道:半经典</div>
-<div>鞍点近似:复时间</div>
-<div>Stokes现象:渐近跳跃</div>
-<div>WKB:ψ∝e^(i/ℏ∫pdx)</div>
-<div>Bohr-Sommerfeld:∮pdq=2πℏ(n+α)</div>
-<div>Maslov指标:α=μ/2</div>
-<div>因果结构:光锥</div>
-<div>事件视界:r=r_s=${(Math.abs(鼠标X*鼠标Y*10)).toFixed(4)}</div>
-<div>Penrose图:共形紧化</div>
-<div>Kruskal-Szekeres:最大延拓</div>
-<div>白洞:时间反演</div>
-<div>虫洞:Einstein-Rosen桥</div>
-<div>时间机器:CTC</div>
-<div>Gödel宇宙:旋转解</div>
-<div>Kerr黑洞:a=J/M</div>
-<div>能层:负能量区</div>
-<div>Penrose过程:提取旋转能</div>
-<div>超辐射:放大散射</div>
-<div>准正规模:ω=ω_R+iω_I</div>
-<div>铃声:振荡频率</div>
-<div>引力波:h_+,h_×</div>
-<div>四极公式:dE/dt=(G/5c⁵)⟨d³Q_ij/dt³⟩²</div>
-<div>啁啾质量:ℳ=${(Math.abs(鼠标X*10+5)).toFixed(4)}M☉</div>
-<div>合并时间:τ=(5/256)(c⁵/G³)·(a⁴/m₁m₂(m₁+m₂))</div>
-<div>应变:h≈${(Math.abs(鼠标X*鼠标Y*1e-21)).toExponential(4)}</div>
-<div>灵敏度:√S_n(f)=${(Math.abs(鼠标Y*1e-23)).toExponential(4)}Hz^(-1/2)</div>
-<div>信噪比:ρ=${(Math.abs(鼠标X*100+10)).toFixed(2)}</div>
-<div>匹配滤波:最优提取</div>
-<div>参数估计:Fisher矩阵</div>
-<div>贝叶斯:P(θ|d)∝P(d|θ)P(θ)</div>
-<div>嵌套采样:证据计算</div>
-<div>MCMC:Markov链</div>
-<div>Metropolis-Hastings算法</div>
-<div>Hamiltonian Monte Carlo</div>
-<div>变分推断:KL散度</div>
-<div>EM算法:期望最大化</div>
-<div>PCA:主成分分析</div>
-<div>t-SNE:非线性降维</div>
-<div>UMAP:流形学习</div>
-<div>神经网络:f(x)=σ(Wx+b)</div>
-<div>反向传播:∂L/∂w=∂L/∂y·∂y/∂w</div>
-<div>梯度下降:w←w-η∇L</div>
-<div>Adam:自适应学习率</div>
-<div>批归一化:标准化激活</div>
-<div>Dropout:p=${(0.5-Math.abs(鼠标X*0.1)).toFixed(4)}</div>
-<div>残差:y=F(x)+x</div>
-<div>注意力:Attention(Q,K,V)=softmax(QK^T/√d_k)V</div>
-<div>Transformer:自注意力</div>
-<div>BERT:双向编码</div>
-<div>GPT:生成预训练</div>
-<div>扩散模型:逐步去噪</div>
-<div>得分匹配:∇_xlogp(x)</div>
-<div>Langevin动力学采样</div>
-<div>VAE:变分自编码</div>
-<div>GAN:生成对抗</div>
-<div>Wasserstein:最优传输</div>
-<div>流模型:可逆变换</div>
-<div>归一化流:det|∂f/∂x|</div>
-<div>能量模型:p(x)∝e^(-E(x))</div>
-<div>对比学习:InfoNCE</div>
-<div>自监督:预训练任务</div>
-<div>元学习:学会学习</div>
-<div>少样本:N-way K-shot</div>
-<div>迁移学习:预训练微调</div>
-<div>多任务:共享表示</div>
-<div>持续学习:避免遗忘</div>
-<div>联邦学习:分布式</div>
-<div>强化学习:Q(s,a)=r+γmaxQ(s',a')</div>
-<div>策略梯度:∇J(θ)=𝔼[∇logπ(a|s)Q(s,a)]</div>
-<div>Actor-Critic:策略+价值</div>
-<div>PPO:近端策略优化</div>
-<div>DDPG:深度确定性</div>
-<div>SAC:软Actor-Critic</div>
-<div>MPC:模型预测控制</div>
-<div>卡尔曼滤波:最优估计</div>
-<div>粒子滤波:序贯Monte Carlo</div>
-<div>动态规划:Bellman方程</div>
-<div>值迭代:V(s)←max_a[r+γV(s')]</div>
-<div>策略迭代:评估+改进</div>
-<div>LQR:线性二次调节</div>
-<div>Riccati:最优控制</div>
-<div>Pontryagin极大值原理</div>
-<div>变分法:δJ=0</div>
-<div>Euler-Lagrange:d/dt(∂L/∂q̇)=∂L/∂q</div>
-<div>Noether:对称性→守恒律</div>
-<div>正则变换:保持辛结构</div>
-<div>泊松括号:{f,g}=Σ(∂f/∂q_i·∂g/∂p_i-∂f/∂p_i·∂g/∂q_i)</div>
-<div>Liouville:dρ/dt={ρ,H}=0</div>
-<div>遍历假设:时间=系综</div>
-<div>KAM定理:准周期稳定</div>
-<div>混沌:λ=${(Math.abs(鼠标X*鼠标Y)).toFixed(4)}</div>
-<div>分形维数:D=${(2+Math.abs(鼠标X)).toFixed(4)}</div>
-<div>Hausdorff维数:盒计数</div>
-<div>奇异吸引子:Lorenz,Rössler</div>
-<div>分岔:倍周期,Hopf,鞍结</div>
-<div>Feigenbaum:δ=4.669...</div>
-<div>普适性:重整化群</div>
-<div>临界指数:ξ∝|T-T_c|^(-ν)</div>
-<div>标度律:幂律行为</div>
-<div>相变:一阶/二阶/连续</div>
-<div>Ising:H=-JΣs_is_j-hΣs_i</div>
-<div>平均场:m=tanh(βJzm+βh)</div>
-<div>临界温度:T_c=${(Math.abs(鼠标X*100+273)).toFixed(2)}K</div>
-<div>关联长度:ξ=${(Math.abs(1/(鼠标X*鼠标X+0.01))).toFixed(4)}</div>
-<div>序参量:⟨m⟩=${(Math.tanh(鼠标X)).toFixed(6)}</div>
-<div>对称性破缺:自发磁化</div>
-<div>Goldstone模:无质量激发</div>
-<div>Higgs机制:规范玻色子获质量</div>
-<div>电弱统一:SU(2)×U(1)</div>
-<div>大统一:SU(5),SO(10)</div>
-<div>超对称:费米子↔玻色子</div>
-<div>超引力:局域超对称</div>
-<div>M理论:11维统一</div>
-<div>D膜:p+1维延展</div>
-<div>T对偶:R↔α'/R</div>
-<div>S对偶:g_s↔1/g_s</div>
-<div>镜像对称:Calabi-Yau</div>
-<div>拓扑弦:A模型,B模型</div>
-<div>Gromov-Witten不变量</div>
-<div>Donaldson-Thomas不变量</div>
-<div>同调代数:Ext,Tor</div>
-<div>导出范畴:三角范畴</div>
-<div>层论:上同调</div>
-<div>谱序列:逐步逼近</div>
-<div>K理论:向量丛分类</div>
-<div>示性类:Chern,Stiefel-Whitney</div>
-<div>Atiyah-Singer指标定理</div>
-<div>椭圆算子:Dirac,∂̄</div>
-<div>模空间:几何参数化</div>
-<div>Teichmüller空间:复结构</div>
-<div>映射类群:同胚模同伦</div>
-<div>辫群:编织关系</div>
-<div>纽结不变量:Jones多项式</div>
-<div>量子群:q变形</div>
-<div>Hopf代数:余乘法</div>
-<div>表示论:不可约表示</div>
-<div>特征标:χ(g)=Trρ(g)</div>
-<div>Schur引理:不可约间态射</div>
+<div>Pauli矩阵:σ_x,σ_y,σ_z</div>
+<div>[σ_i,σ_j]=2iε_{ijk}σ_k</div>
+<div>自旋-轨道耦合:ξ(r)L·S</div>
+<div>总角动量:J=L+S</div>
 <div>Clebsch-Gordan系数</div>
-<div>Wigner-Eckart定理</div>
-<div>6j符号,9j符号</div>
-<div>Racah代数:角动量耦合</div>
-<div>Young图:对称群表示</div>
-<div>Littlewood-Richardson规则</div>
-<div>Kostka数:分拆组合</div>
-<div>Schur函数:对称多项式</div>
-<div>Macdonald多项式:q,t变形</div>
-<div>仿射Lie代数:循环扩张</div>
-<div>Kac-Moody代数:无限维</div>
-<div>Virasoro代数:共形对称</div>
-<div>中心荷:c=${(Math.abs(鼠标X*10)).toFixed(4)}</div>
-<div>共形维数:h=${(Math.abs(鼠标Y*2)).toFixed(4)}</div>
-<div>算子乘积展开:OPE</div>
-<div>Ward恒等式:对称性约束</div>
-<div>最小模型:c<1离散系列</div>
-<div>Verlinde公式:融合规则</div>
-<div>模不变性:τ→(aτ+b)/(cτ+d)</div>
-<div>配分函数:Z(τ)=Trq^(L_0-c/24)</div>
-<div>Dedekindη函数</div>
-<div>Jacobiθ函数</div>
-<div>Eisenstein级数</div>
-<div>模形式:权重k变换</div>
-<div>Ramanujanτ函数</div>
-<div>椭圆曲线:y²=x³+ax+b</div>
-<div>j不变量:j=1728g₂³/Δ</div>
-<div>Weierstrass℘函数</div>
-<div>Abel定理:积分可加性</div>
-<div>Riemann-Roch定理</div>
-<div>亏格:g=${Math.floor(Math.abs(鼠标X*5))}</div>
-<div>Jacobi簇:紧复环面</div>
-<div>θ除子:特殊除子</div>
-<div>Torelli定理:周期映射</div>
-<div>Hodge理论:调和形式</div>
-<div>Kähler流形:复辛结构</div>
-<div>Calabi猜想:Yau证明</div>
-<div>Ricci平坦度规</div>
-<div>SYZ猜想:镜像对称几何</div>
-<div>Strominger-Yau-Zaslow纤维化</div>
+<div>Wigner 3j符号</div>
+<div>球谐函数:Y_l^m(θ,φ)</div>
+<div>Legendre多项式:P_l(cosθ)</div>
+<div>连带Legendre:P_l^m(x)</div>
+<div>正交性:∫Y_l^m*Y_{l'}^{m'}dΩ=δ_{ll'}δ_{mm'}</div>
+<div>加法定理:P_l(cosγ)=Σ Y_l^m*(θ,φ)Y_l^m(θ',φ')</div>
+<div>拉格朗日力学:L=T-V=${拉格朗日.toFixed(6)}J</div>
+<div>作用量:S=∫L dt</div>
+<div>最小作用量原理:δS=0</div>
+<div>Euler-Lagrange:d/dt(∂L/∂q̇_i)=∂L/∂q_i</div>
+<div>广义动量:p_i=∂L/∂q̇_i</div>
+<div>广义力:Q_i=∂L/∂q_i</div>
+<div>循环坐标:∂L/∂q_i=0→p_i=常数</div>
+<div>Noether定理:对称性↔守恒律</div>
+<div>时间平移→能量守恒</div>
+<div>空间平移→动量守恒</div>
+<div>旋转→角动量守恒</div>
+<div>Hamilton力学:H=Σp_iq̇_i-L=${哈密顿.toFixed(6)}J</div>
+<div>正则方程:q̇_i=∂H/∂p_i</div>
+<div>ṗ_i=-∂H/∂q_i</div>
+<div>Poisson括号:{f,g}=Σ(∂f/∂q_i·∂g/∂p_i-∂f/∂p_i·∂g/∂q_i)</div>
+<div>{q_i,p_j}=δ_{ij}</div>
+<div>{q_i,q_j}={p_i,p_j}=0</div>
+<div>Liouville定理:dρ/dt={ρ,H}=0</div>
+<div>相空间体积守恒</div>
+<div>正则变换:保持{Q_i,P_j}=δ_{ij}</div>
+<div>生成函数:F(q,P,t)</div>
+<div>Hamilton-Jacobi:H+∂S/∂t=0</div>
+<div>作用-角变量:(I,θ)</div>
+<div>绝热不变量:I=∮p dq</div>
+<div>KAM定理:准周期轨道稳定性</div>
+<div>Poincaré截面:混沌诊断</div>
+<div>Lyapunov指数:λ=${(Math.abs(鼠标X*鼠标Y*2)).toFixed(8)}</div>
+<div>混沌:λ>0</div>
+<div>遍历性:时间平均=空间平均</div>
+<div>各态历经假设</div>
+<div>统计力学:S=k_B ln Ω</div>
+<div>Boltzmann常数:k_B=${(1.381e-23).toExponential(8)}J/K</div>
+<div>配分函数:Z=Σ_i e^(-E_i/k_BT)</div>
+<div>正则系综:p_i=e^(-E_i/k_BT)/Z</div>
+<div>自由能:F=-k_BT ln Z</div>
+<div>内能:U=⟨E⟩=-∂ln Z/∂β</div>
+<div>熵:S=-k_B Σp_i ln p_i</div>
+<div>热力学第二定律:dS≥0</div>
+<div>Maxwell关系:∂²F/∂x∂y=∂²F/∂y∂x</div>
+<div>Gibbs自由能:G=H-TS</div>
+<div>化学势:μ=∂G/∂N</div>
+<div>巨正则系综:Ξ=Σe^((μN-E)/k_BT)</div>
+<div>Fermi-Dirac:f(E)=1/(e^((E-μ)/k_BT)+1)</div>
+<div>Bose-Einstein:n(E)=1/(e^((E-μ)/k_BT)-1)</div>
+<div>Maxwell-Boltzmann:f(E)∝e^(-E/k_BT)</div>
+<div>Planck分布:B(ν,T)=2hν³/c²·1/(e^(hν/k_BT)-1)</div>
+<div>Wien位移:λ_max T=2.898×10⁻³m·K</div>
+<div>Stefan-Boltzmann:j=σT⁴</div>
+<div>σ=${(5.67e-8).toExponential(6)}W·m⁻²·K⁻⁴</div>
+<div>Rayleigh-Jeans:紫外灾难</div>
+<div>量子修正:Planck解决</div>
+<div>光电效应:E_k=hν-W</div>
+<div>Compton散射:Δλ=λ_C(1-cosθ)</div>
+<div>Raman散射:非弹性</div>
+<div>Brillouin散射:声子</div>
+<div>电磁场:E,B</div>
+<div>Maxwell方程:∇·E=ρ/ε₀</div>
+<div>∇·B=0</div>
+<div>∇×E=-∂B/∂t</div>
+<div>∇×B=μ₀J+μ₀ε₀∂E/∂t</div>
+<div>Lorentz力:F=q(E+v×B)</div>
+<div>电磁波:c=1/√(μ₀ε₀)</div>
+<div>Poynting矢量:S=E×H/μ₀</div>
+<div>能量密度:u=ε₀E²/2+B²/(2μ₀)</div>
+<div>动量密度:g=S/c²</div>
+<div>辐射压:P=I/c</div>
+<div>偶极辐射:P∝|p̈|²</div>
+<div>Larmor公式:P=q²a²/(6πε₀c³)</div>
+<div>同步辐射:相对论电子</div>
+<div>Bremsstrahlung:制动辐射</div>
+<div>Cherenkov辐射:v>c/n</div>
+<div>相对论:E²=(pc)²+(mc²)²</div>
+<div>E=γmc²</div>
+<div>γ=1/√(1-v²/c²)=${(1/Math.sqrt(1-Math.abs(鼠标X*0.1)**2)).toFixed(8)}</div>
+<div>时间膨胀:Δt'=γΔt</div>
+<div>长度收缩:L'=L/γ</div>
+<div>速度加法:u'=(u-v)/(1-uv/c²)</div>
+<div>Doppler效应:ν'=ν√((1-β)/(1+β))</div>
+<div>四维矢量:x^μ=(ct,x,y,z)</div>
+<div>度规:η_μν=diag(-1,1,1,1)</div>
+<div>间隔:ds²=-c²dt²+dx²+dy²+dz²</div>
+<div>固有时:dτ=dt/γ</div>
+<div>四维速度:u^μ=dx^μ/dτ</div>
+<div>四维动量:p^μ=(E/c,p)</div>
+<div>p^μp_μ=-m²c²</div>
+<div>广义相对论:时空弯曲</div>
+<div>Einstein场方程:R_μν-½Rg_μν+Λg_μν=8πG/c⁴·T_μν</div>
+<div>Ricci张量:R_μν</div>
+<div>Ricci标量:R=g^μνR_μν</div>
+<div>宇宙学常数:Λ</div>
+<div>能动张量:T_μν</div>
+<div>测地线:d²x^μ/dτ²+Γ^μ_αβ dx^α/dτ dx^β/dτ=0</div>
+<div>Christoffel符号:Γ^λ_μν=½g^λσ(∂_μg_νσ+∂_νg_μσ-∂_σg_μν)</div>
+<div>Riemann曲率:R^ρ_σμν</div>
+<div>Schwarzschild度规:黑洞</div>
+<div>事件视界:r_s=2GM/c²</div>
+<div>Kerr度规:旋转黑洞</div>
+<div>Penrose过程:提取能量</div>
+<div>Hawking辐射:T_H=ℏc³/(8πGMk_B)</div>
+<div>黑洞熵:S_BH=k_Bc³A/(4Gℏ)</div>
+<div>全息原理:信息在边界</div>
+<div>引力波:h_μν</div>
+<div>应变:h≈${(Math.abs(鼠标X*鼠标Y*1e-21)).toExponential(8)}</div>
+<div>四极公式:dE/dt∝⟨Q̈_ij⟩²</div>
+<div>双星系统:轨道衰减</div>
+<div>LIGO探测:2015首次</div>
+<div>宇宙学:Friedmann方程</div>
+<div>(ȧ/a)²=8πGρ/3-k/a²+Λ/3</div>
+<div>Hubble参数:H=ȧ/a</div>
+<div>H₀≈70 km·s⁻¹·Mpc⁻¹</div>
+<div>临界密度:ρ_c=3H²/(8πG)</div>
+<div>密度参数:Ω=ρ/ρ_c</div>
+<div>平坦宇宙:Ω_tot=1</div>
+<div>暗物质:Ω_DM≈0.27</div>
+<div>暗能量:Ω_Λ≈0.68</div>
+<div>重子物质:Ω_b≈0.05</div>
+<div>宇宙年龄:t₀≈13.8Gyr</div>
+<div>红移:z=(λ_obs-λ_emit)/λ_emit</div>
+<div>距离-红移:d_L=(c/H₀)(1+z)∫dz'/E(z')</div>
+<div>CMB温度:T_CMB=2.725K</div>
+<div>重组:z≈1100</div>
+<div>再电离:z≈6-20</div>
+<div>结构形成:引力不稳定性</div>
+<div>Jeans质量:M_J∝T^(3/2)/√ρ</div>
+<div>功率谱:P(k)∝k^n</div>
+<div>Harrison-Zel'dovich:n=1</div>
+<div>暴胀:指数膨胀</div>
+<div>慢滚条件:ε,η≪1</div>
+<div>原初扰动:量子涨落</div>
+<div>曲率扰动:ℛ</div>
+<div>张量-标量比:r</div>
+<div>谱指数:n_s≈0.96</div>
+<div>粒子物理:标准模型</div>
+<div>规范群:SU(3)_C×SU(2)_L×U(1)_Y</div>
+<div>夸克:u,d,c,s,t,b</div>
+<div>轻子:e,μ,τ,ν_e,ν_μ,ν_τ</div>
+<div>规范玻色子:γ,W±,Z,g</div>
+<div>Higgs玻色子:H</div>
+<div>质量:m_H≈125GeV</div>
+<div>Yukawa耦合:y_f</div>
+<div>CKM矩阵:夸克混合</div>
+<div>PMNS矩阵:中微子振荡</div>
+<div>CP破坏:物质-反物质不对称</div>
+<div>强相互作用:QCD</div>
+<div>渐近自由:高能弱耦合</div>
+<div>禁闭:低能强耦合</div>
+<div>手征对称性破缺</div>
+<div>QCD相变:T_c≈170MeV</div>
+<div>夸克-胶子等离子体</div>
+<div>弱相互作用:电弱统一</div>
+<div>Fermi常数:G_F=${(1.166e-5).toExponential(8)}GeV⁻²</div>
+<div>Weinberg角:sin²θ_W≈0.23</div>
+<div>中性流:Z交换</div>
+<div>荷电流:W±交换</div>
+<div>β衰变:n→p+e⁻+ν̄_e</div>
+<div>μ衰变:μ⁻→e⁻+ν̄_e+ν_μ</div>
+<div>超出标准模型:BSM</div>
+<div>大统一理论:GUT</div>
+<div>质子衰变:τ_p>10³⁴yr</div>
+<div>超对称:SUSY</div>
+<div>超伴子:费米子↔玻色子</div>
+<div>R宇称:稳定LSP</div>
+<div>暗物质候选:中性微子</div>
+<div>额外维度:Kaluza-Klein</div>
+<div>弦论:一维延展对象</div>
+<div>临界维数:D=26(玻色),D=10(超弦)</div>
+<div>紧致化:Calabi-Yau流形</div>
+<div>D膜:p+1维超曲面</div>
+<div>对偶性:T,S,U对偶</div>
+<div>M理论:11维统一</div>
+<div>AdS/CFT:全息对偶</div>
+<div>量子引力:Planck尺度</div>
+<div>l_P=√(Gℏ/c³)=${(1.616e-35).toExponential(8)}m</div>
+<div>t_P=√(Gℏ/c⁵)=${(5.391e-44).toExponential(8)}s</div>
+<div>E_P=√(ℏc⁵/G)≈1.22×10¹⁹GeV</div>
+<div>圈量子引力:LQG</div>
+<div>自旋网络:量子几何</div>
+<div>面积量子化:A=8πγl_P²√(j(j+1))</div>
+<div>黑洞微观态计数</div>
+<div>因果动力学三角剖分:CDT</div>
+<div>渐近安全性:UV固定点</div>
+<div>非对易几何:[x^μ,x^ν]=iθ^μν</div>
+<div>量子场论:QFT</div>
+<div>Lagrangian密度:ℒ</div>
+<div>作用量:S=∫ℒ d⁴x</div>
+<div>Klein-Gordon:(□+m²)φ=0</div>
+<div>Dirac:(iγ^μ∂_μ-m)ψ=0</div>
+<div>γ矩阵:{γ^μ,γ^ν}=2η^μν</div>
+<div>旋量:ψ=(ψ_L,ψ_R)</div>
+<div>手征性:γ⁵=iγ⁰γ¹γ²γ³</div>
+<div>Weyl旋量:左手/右手</div>
+<div>Majorana:实旋量</div>
+<div>传播子:⟨0|Tφ(x)φ(y)|0⟩</div>
+<div>Feynman规则:微扰计算</div>
+<div>顶点:相互作用</div>
+<div>内线:虚粒子</div>
+<div>外线:实粒子</div>
+<div>圈图:量子修正</div>
+<div>发散:UV,IR</div>
+<div>正规化:截断,维数,Pauli-Villars</div>
+<div>重整化:吸收无穷大</div>
+<div>可重整性:超可重整,可重整,不可重整</div>
+<div>有效场论:EFT</div>
+<div>Wilson系数:高能积分</div>
+<div>算符维数:质量量纲</div>
+<div>重整化群:RG</div>
+<div>β函数:μdg/dμ=β(g)</div>
+<div>反常维度:γ(g)</div>
+<div>跑动耦合:g(μ)</div>
+<div>固定点:β(g*)=0</div>
+<div>UV/IR固定点</div>
+<div>临界现象:相变</div>
+<div>标度律:幂律行为</div>
+<div>普适类:临界指数</div>
+<div>ε展开:d=4-ε</div>
+<div>共形场论:CFT</div>
+<div>共形对称:角度保持</div>
+<div>共形群:SO(d+1,1)</div>
+<div>初级场:Δ,s</div>
+<div>算符乘积展开:OPE</div>
+<div>共形bootstrap:自洽性</div>
+<div>中心荷:c=${(Math.abs(鼠标X*15)).toFixed(6)}</div>
+<div>Virasoro代数:[L_m,L_n]=(m-n)L_{m+n}+c/12·m(m²-1)δ_{m+n,0}</div>
+<div>最小模型:c<1</div>
+<div>Kac表:h_{r,s}</div>
+<div>模不变性:τ变换</div>
+<div>配分函数:Z(τ,τ̄)</div>
+<div>特征标:χ_i(τ)</div>
+<div>Verlinde公式:N_{ij}^k</div>
+<div>融合规则:φ_i×φ_j=ΣN_{ij}^kφ_k</div>
+<div>拓扑场论:TQFT</div>
+<div>Chern-Simons:k∫Tr(AdA+⅔A³)</div>
+<div>Jones多项式:纽结不变量</div>
+<div>Witten不变量:3-流形</div>
+<div>Donaldson不变量:4-流形</div>
+<div>Seiberg-Witten不变量</div>
+<div>镜像对称:Calabi-Yau对</div>
+<div>Gromov-Witten不变量:曲线计数</div>
+<div>量子上同调:变形乘法</div>
+<div>Fukaya范畴:Lagrangian子流形</div>
+<div>同调镜像对称:D^b(Coh)≅D^πF(Symp)</div>
+<div>SYZ猜想:T³纤维化</div>
 <div>大复结构极限</div>
-<div>Gepner点:共形场论点</div>
 <div>Landau-Ginzburg模型</div>
-<div>超势:W(Φ)</div>
-<div>临界点:∂W/∂Φ_i=0</div>
-<div>Morse理论:临界点拓扑</div>
-<div>Floer同调:无穷维Morse</div>
-<div>辛几何:ω闭非退化</div>
-<div>Hamiltonian流:X_H=ω^(-1)(dH)</div>
-<div>矩映射:μ:M→𝔤*</div>
-<div>辛约化:M//G</div>
-<div>Marsden-Weinstein商</div>
-<div>Duistermaat-Heckman定理</div>
-<div>局部化公式:积分→求和</div>
-<div>等变上同调:H_G*(M)</div>
-<div>Kirwan映射</div>
-<div>GIT商:几何不变量理论</div>
-<div>稳定性条件:Mumford</div>
-<div>Hilbert方案:子概形模空间</div>
-<div>Quot概形:商层模空间</div>
-<div>Bridgeland稳定性</div>
-<div>导出等价:D^b(X)≅D^b(Y)</div>
-<div>Fourier-Mukai变换</div>
-<div>核对象:𝒫∈D^b(X×Y)</div>
-<div>自同构群:Aut(D^b(X))</div>
-<div>球面对象:Ext^i(E,E)=ℂ[i]</div>
-<div>半正交分解:⟨𝒜₁,...,𝒜_n⟩</div>
-<div>例外集合:生成元</div>
-<div>倾斜对象:生成器</div>
-<div>t结构:心</div>
-<div>稳定性条件空间:Stab(𝒟)</div>
-<div>墙穿越:稳定性变化</div>
-<div>Donaldson-Thomas不变量计数</div>
-<div>Pandharipande-Thomas不变量</div>
-<div>Gopakumar-Vafa不变量</div>
+<div>超势:W(Φ_i)</div>
+<div>临界点方程:∂W/∂Φ_i=0</div>
+<div>Jacobian环:ℂ[Φ]/(∂W)</div>
+<div>范畴等价:MF(W)≅D^b(X)</div>
+<div>Orlov定理</div>
+<div>Knörrer周期性</div>
+<div>矩阵分解:因子化</div>
+<div>GLSM:规范线性σ模型</div>
+<div>Kähler参数:t=r+iθ</div>
+<div>量子修正:镜像映射</div>
+<div>Picard-Fuchs方程</div>
+<div>周期积分:∫Ω</div>
+<div>Yukawa耦合:C_{ijk}(t)</div>
+<div>特殊几何:预备几何</div>
+<div>N=2超对称:向量多重态,超多重态</div>
 <div>BPS态:短超多重态</div>
-<div>中心荷公式:Z(γ)∈ℂ</div>
-<div>光线:argZ(γ)=常数</div>
-<div>跃迁:光线穿越</div>
-<div>Kontsevich-Soibelman墙穿越公式</div>
-<div>量子环面代数</div>
-<div>簇代数:Fomin-Zelevinsky</div>
-<div>簇变换:突变</div>
-<div>Laurent现象</div>
-<div>正性猜想:系数>0</div>
-<div>有限型分类:Dynkin图</div>
-<div>仿射型:扩展Dynkin</div>
-<div>无限型:野性表示</div>
-<div>箭图:顶点+箭头</div>
-<div>路代数:基础代数</div>
-<div>关系:理想I</div>
-<div>表示:模M</div>
-<div>维数向量:dimM=(d₁,...,d_n)</div>
-<div>Euler形式:⟨α,β⟩</div>
-<div>根系统:Φ⊂𝔥*</div>
-<div>Weyl群:W=⟨s_α⟩</div>
-<div>Cartan矩阵:A_ij</div>
-<div>Dynkin图:节点+边</div>
-<div>单根:Π={α₁,...,α_n}</div>
-<div>正根:Φ⁺</div>
-<div>最高根:θ</div>
-<div>Coxeter数:h</div>
-<div>对偶Coxeter数:h^∨</div>
-<div>Killing形式:κ(x,y)=Tr(adxady)</div>
-<div>Casimir算子:C=ΣT^aT_a</div>
-<div>二次Casimir本征值:C₂(R)</div>
-<div>Dynkin指标:T(R)</div>
-<div>反常系数:A(R)</div>
-<div>β函数:β(g)=-b₀g³+...</div>
-<div>渐近自由:b₀>0</div>
-<div>红外固定点:β(g*)=0</div>
-<div>共形窗口:N_f范围</div>
-<div>Banks-Zaks固定点</div>
-<div>Seiberg对偶:强弱耦合</div>
-<div>'tHooft反常匹配</div>
-<div>超对称指标:Tr(-1)^Fe^(-βH)</div>
-<div>Witten指标:Tr(-1)^F</div>
-<div>椭圆亏格:超对称分拆函数</div>
-<div>局域化:路径积分→有限维</div>
-<div>Nekrasov分拆函数</div>
-<div>ε变形:Ω背景</div>
-<div>AGT对应:4d规范↔2dCFT</div>
-<div>Alday-Gaiotto-Tachikawa</div>
-<div>Liouville理论:中心荷c>25</div>
-<div>Toda理论:W代数</div>
-<div>仿射Toda:可积系统</div>
-<div>Yangian:量子群</div>
-<div>R矩阵:杨-Baxter方程</div>
-<div>Betheansatz:精确解</div>
-<div>传递矩阵:对易族</div>
-<div>守恒荷:无穷多</div>
-<div>散射矩阵:因子化</div>
-<div>CDD因子:束缚态极点</div>
-<div>热力学Betheansatz:TBA</div>
-<div>Y系统:函数方程</div>
-<div>T系统:T函数</div>
-<div>Q系统:BaxterQ算子</div>
-<div>Hirota方程:双线性</div>
-<div>τ函数:KP/KdV层次</div>
-<div>SatoGrassmannian</div>
-<div>无限维Plücker关系</div>
-<div>顶点算子:场代数</div>
-<div>Fock空间:玻色/费米</div>
-<div>正规序::AB:</div>
-<div>Wick定理:收缩</div>
-<div>费曼图:微扰展开</div>
-<div>圈积分:发散正规化</div>
-<div>维数正规化:d=4-2ε</div>
-<div>最小减除:MS̄方案</div>
-<div>重整化尺度:μ</div>
-<div>跑动耦合:α(μ)</div>
-<div>DGLAP方程:部分子演化</div>
-<div>Altarelli-Parisi分裂函数</div>
-<div>BFKL方程:小x物理</div>
-<div>Regge理论:高能散射</div>
-<div>Pomeron:真空量子数交换</div>
-<div>色玻璃凝聚:CGC</div>
-<div>饱和:Qs²=${(Math.abs(鼠标X*鼠标Y*100)).toFixed(2)}GeV²</div>
-<div>BK方程:Balitsky-Kovchegov</div>
-<div>JIMWLK方程:重整化群</div>
-<div>Wilson线:规范联络</div>
-<div>Polyakov环:有限温度序参量</div>
-<div>禁闭-退禁闭相变</div>
-<div>夸克-胶子等离子体:QGP</div>
-<div>手征对称性恢复</div>
-<div>QCD相图:T-μ平面</div>
-<div>临界点:一阶线终点</div>
-<div>重离子碰撞:小爆炸</div>
-<div>流体力学:相对论Navier-Stokes</div>
-<div>剪切粘度:η/s≈1/(4π)</div>
-<div>KSS界:全息下界</div>
-<div>椭圆流:v₂=${(Math.abs(Math.sin(鼠标X*2))*0.2).toFixed(4)}</div>
-<div>喷注淬火:能量损失</div>
-<div>重味:魅夸克,底夸克</div>
-<div>夸克偶素:J/ψ,Υ</div>
-<div>屏蔽:Debye质量</div>
-<div>解离温度:T_d</div>
-<div>再结合:统计强子化</div>
-<div>热场论:虚时形式</div>
-<div>Matsubara频率:ω_n=2πnT</div>
-<div>实时形式:Schwinger-Keldysh</div>
-<div>Kubo公式:线性响应</div>
+<div>中心荷:Z=∫Ω∧γ</div>
+<div>稳定性条件:Bridgeland</div>
+<div>墙穿越:BPS谱跃迁</div>
+<div>Kontsevich-Soibelman公式</div>
+<div>DT不变量:理想层计数</div>
+<div>PT不变量:稳定对</div>
+<div>GV不变量:BPS态</div>
+<div>OSV猜想:拓扑弦/黑洞</div>
+<div>Ooguri-Strominger-Vafa</div>
+<div>微观态计数:e^(S_BH)</div>
+<div>拓扑弦配分函数:Z_top</div>
+<div>A模型:Kähler形式</div>
+<div>B模型:复结构</div>
+<div>开弦:边界条件</div>
+<div>闭弦:紧致化</div>
+<div>世界面:Σ_g</div>
+<div>亏格展开:g_s^{2g-2}</div>
+<div>弦耦合:g_s=${(Math.abs(鼠标X*0.5+0.1)).toFixed(6)}</div>
+<div>α'修正:弦长度</div>
+<div>低能有效作用量</div>
+<div>超引力:局域超对称</div>
+<div>Kaluza-Klein塔:KK模式</div>
+<div>模稳定:KKLT,LVS</div>
+<div>通量紧致化</div>
+<div>warped几何:翘曲因子</div>
+<div>Randall-Sundrum模型</div>
+<div>层次问题:Planck/弱尺度</div>
+<div>大额外维:ADD模型</div>
+<div>TeV尺度引力</div>
+<div>黑洞工厂:LHC?</div>
+<div>微型黑洞:蒸发</div>
+<div>信息悖论:Hawking</div>
+<div>Page曲线:纠缠熵演化</div>
+<div>岛屿公式:量子极值面</div>
+<div>ER=EPR:虫洞=纠缠</div>
+<div>量子纠错码:AdS/CFT</div>
+<div>体边对应:bulk-boundary</div>
+<div>HKLL重构:体算符</div>
+<div>纠缠楔:因果楔</div>
+<div>Ryu-Takayanagi公式:S_A=Area(γ_A)/(4G_N)</div>
+<div>HRT公式:协变推广</div>
+<div>量子零能条件:QNEC</div>
+<div>量子聚焦猜想:QFC</div>
+<div>平均零能条件:ANEC</div>
+<div>因果性:时序保护</div>
+<div>混沌:OTOC</div>
+<div>无序平均时序关联子</div>
+<div>Lyapunov指数:λ_L≤2πk_BT/ℏ</div>
+<div>混沌界:饱和黑洞</div>
+<div>scrambling时间:t*∼β log S</div>
+<div>快速scrambler:黑洞</div>
+<div>SYK模型:可解混沌</div>
+<div>Sachdev-Ye-Kitaev</div>
+<div>Majorana费米子:随机耦合</div>
+<div>近似共形:低温</div>
+<div>全息对偶:JT引力</div>
+<div>Jackiw-Teitelboim</div>
+<div>dilaton引力:2维</div>
+<div>Schwarzian作用量</div>
+<div>重整化时间:τ=tan(t/β)</div>
+<div>谱形因子:能级统计</div>
+<div>随机矩阵:GUE,GOE,GSE</div>
+<div>Wigner-Dyson统计</div>
+<div>能级排斥</div>
+<div>Poisson统计:可积系统</div>
+<div>量子疤痕:非遍历本征态</div>
+<div>多体局域化:MBL</div>
+<div>本征态热化假设:ETH</div>
+<div>热化:子系统</div>
+<div>量子淬火:非平衡</div>
+<div>Kibble-Zurek机制:缺陷形成</div>
+<div>绝热定理:缓慢演化</div>
+<div>Landau-Zener公式:能级交叉</div>
+<div>Berry相位:几何相位</div>
+<div>Aharonov-Bohm效应</div>
+<div>拓扑相:拓扑序</div>
+<div>对称保护拓扑:SPT</div>
+<div>本征拓扑序:长程纠缠</div>
+<div>量子霍尔效应:IQHE,FQHE</div>
+<div>Chern数:C=${Math.floor(鼠标X*5)}</div>
+<div>边缘态:体边对应</div>
+<div>Laughlin波函数:ν=1/m</div>
+<div>复合费米子:通量附着</div>
+<div>任意子:分数统计</div>
+<div>编织:非Abel,Abel</div>
+<div>拓扑量子计算</div>
+<div>Fibonacci任意子</div>
+<div>Ising任意子</div>
+<div>Majorana零模:拓扑超导</div>
+<div>Kitaev链:p波配对</div>
+<div>拓扑绝缘体:Z₂不变量</div>
+<div>时间反演对称:Kramers简并</div>
+<div>自旋-轨道耦合</div>
+<div>表面态:Dirac锥</div>
+<div>Weyl半金属:手征费米子</div>
+<div>手征反常:不守恒</div>
+<div>负磁阻:手征磁效应</div>
+<div>Fermi弧:表面态</div>
+<div>拓扑超导:Majorana</div>
+<div>p+ip配对:手征</div>
+<div>d波配对:节点</div>
+<div>非常规超导</div>
+<div>强关联:Mott绝缘体</div>
+<div>Hubbard模型:U/t</div>
+<div>t-J模型:超交换</div>
+<div>高温超导:铜氧化物</div>
+<div>赝能隙:T*>T_c</div>
+<div>奇异金属:线性电阻</div>
+<div>量子临界点:T=0相变</div>
+<div>量子临界区:扇形</div>
+<div>Planckian耗散:τ∼ℏ/(k_BT)</div>
+<div>SYK:最大混沌</div>
+<div>全息超导:AdS/CMT</div>
+<div>凝聚物质/引力对偶</div>
+<div>奇异金属:黑洞视界</div>
+<div>粘滞比:η/s=ℏ/(4πk_B)</div>
+<div>完美流体:QGP,冷原子</div>
+<div>幺正费米气:共振散射</div>
+<div>Feshbach共振:可调相互作用</div>
+<div>BEC-BCS渡越</div>
+<div>冷原子:光晶格</div>
+<div>Bose-Hubbard模型</div>
+<div>超流-Mott相变</div>
+<div>量子模拟:费曼愿景</div>
+<div>量子计算:量子优势</div>
+<div>Shor算法:因数分解</div>
+<div>Grover搜索:√N加速</div>
+<div>量子退火:优化</div>
+<div>VQE:变分量子本征求解器</div>
+<div>QAOA:量子近似优化</div>
+<div>量子机器学习:QML</div>
+<div>量子神经网络:参数化电路</div>
+<div>量子核方法:特征映射</div>
+<div>量子优势:指数加速?</div>
+<div>NISQ时代:含噪中等规模</div>
+<div>量子纠错:容错</div>
+<div>表面码:拓扑码</div>
+<div>阈值定理:p<p_th</div>
+<div>逻辑量子比特:编码</div>
+<div>魔态蒸馏:T门</div>
+<div>Clifford+T:通用门集</div>
+<div>Solovay-Kitaev定理:有效编译</div>
+<div>量子霸权:Google 2019</div>
+<div>随机电路采样</div>
+<div>玻色采样:光子</div>
+<div>IQP电路:瞬时量子多项式</div>
+<div>复杂性理论:BQP,QMA</div>
+<div>量子PCP猜想</div>
+<div>纠缠熵:von Neumann</div>
+<div>Rényi熵:S_α=1/(1-α)·log Tr ρ^α</div>
+<div>纠缠谱:Schmidt分解</div>
+<div>纠缠哈密顿量:模拟边缘理论</div>
+<div>面积定律:基态纠缠</div>
+<div>对数修正:临界系统</div>
+<div>体积定律:热态,MBL</div>
+<div>张量网络:有效表示</div>
+<div>MPS:矩阵乘积态</div>
+<div>PEPS:投影纠缠对态</div>
+<div>MERA:多尺度纠缠重整化</div>
+<div>TTN:树张量网络</div>
+<div>张量重整化群:TRG</div>
+<div>高阶张量:收缩算法</div>
+<div>键维数:χ=${Math.floor(Math.abs(鼠标X*100+10))}</div>
+<div>截断误差:ε=${(Math.abs(鼠标Y*1e-6)).toExponential(6)}</div>
+<div>DMRG:密度矩阵重整化群</div>
+<div>White算法:1维强关联</div>
+<div>时间演化:TEBD,tDMRG</div>
+<div>二维系统:iPEPS</div>
+<div>量子化学:电子结构</div>
+<div>Hartree-Fock:平均场</div>
+<div>组态相互作用:CI</div>
+<div>耦合簇:CC</div>
+<div>密度泛函理论:DFT</div>
+<div>Kohn-Sham方程</div>
+<div>交换-关联泛函:LDA,GGA</div>
+<div>杂化泛函:B3LYP</div>
+<div>范德华:色散相互作用</div>
+<div>基组:STO,GTO</div>
+<div>赝势:有效核势</div>
+<div>平面波:周期系统</div>
+<div>第一性原理:从头算</div>
+<div>分子动力学:MD</div>
+<div>Born-Oppenheimer近似</div>
+<div>势能面:PES</div>
+<div>过渡态理论:TST</div>
+<div>反应路径:IRC</div>
+<div>自由能:热力学积分</div>
+<div>增强采样:metadynamics</div>
+<div>集体变量:反应坐标</div>
+<div>机器学习势:神经网络</div>
+<div>描述符:对称函数</div>
+<div>主动学习:不确定性</div>
+<div>数据驱动:材料发现</div>
+<div>高通量计算:筛选</div>
+<div>材料基因组:数据库</div>
+<div>逆向设计:目标性质</div>
+<div>生成模型:VAE,GAN</div>
+<div>贝叶斯优化:高效搜索</div>
+<div>迁移学习:少样本</div>
+<div>可解释AI:物理约束</div>
+<div>符号回归:方程发现</div>
+<div>因果推断:机制</div>
+<div>科学机器学习:SciML</div>
+<div>物理信息神经网络:PINN</div>
+<div>神经算子:函数空间</div>
+<div>DeepONet:算子学习</div>
+<div>Fourier神经算子:FNO</div>
+<div>图神经网络:GNN</div>
+<div>消息传递:节点更新</div>
+<div>等变网络:对称性</div>
+<div>注意力机制:Transformer</div>
+<div>自监督:对比学习</div>
+<div>基础模型:预训练</div>
+<div>涌现能力:规模定律</div>
+<div>上下文学习:few-shot</div>
+<div>思维链:推理</div>
+<div>工具使用:增强</div>
+<div>多模态:视觉-语言</div>
+<div>世界模型:预测</div>
+<div>具身智能:机器人</div>
+<div>强化学习:策略优化</div>
+<div>离线RL:批量数据</div>
+<div>模型基础:规划</div>
+<div>元学习:快速适应</div>
+<div>终身学习:持续</div>
+<div>因果RL:干预</div>
+<div>安全RL:约束</div>
+<div>可解释性:注意力可视化</div>
+<div>对抗鲁棒性:扰动</div>
+<div>分布外泛化:OOD</div>
+<div>不确定性量化:贝叶斯</div>
+<div>主动学习:查询策略</div>
+<div>联邦学习:隐私保护</div>
+<div>差分隐私:ε-DP</div>
+<div>公平性:偏见缓解</div>
+<div>对齐:人类价值观</div>
+<div>RLHF:人类反馈</div>
+<div>宪法AI:原则</div>
+<div>红队:对抗测试</div>
+<div>能力评估:基准</div>
+<div>AGI:通用人工智能</div>
+<div>意识:难问题</div>
+<div>涌现:整体>部分</div>
+<div>复杂性:自组织</div>
+<div>生命:自复制,代谢</div>
+<div>进化:变异,选择</div>
+<div>适应度景观:优化</div>
+<div>中性网络:鲁棒性</div>
+<div>模块性:层次结构</div>
+<div>网络科学:图论</div>
+<div>小世界:短路径</div>
+<div>无标度:幂律度分布</div>
+<div>社区结构:模块度</div>
+<div>中心性:重要节点</div>
+<div>传播:流行病,信息</div>
+<div>级联:雪崩</div>
+<div>韧性:鲁棒性</div>
+<div>相变:渗流</div>
+<div>临界性:自组织临界</div>
+<div>幂律:标度不变</div>
+<div>1/f噪声:粉红噪声</div>
+<div>长程关联:Hurst指数</div>
+<div>分形时间序列</div>
+<div>多重分形:局部标度</div>
+<div>间歇性:爆发</div>
+<div>湍流:Kolmogorov</div>
+<div>能量级联:涡旋</div>
+<div>耗散:粘性</div>
+<div>雷诺数:Re=${(Math.abs(鼠标X*鼠标Y*10000)).toFixed(2)}</div>
+<div>层流-湍流转变</div>
+<div>吸引子:Lorenz,Rössler</div>
+<div>奇异吸引子:分形</div>
+<div>Lyapunov谱:稳定性</div>
+<div>Kaplan-Yorke维数</div>
+<div>Poincaré映射:降维</div>
+<div>分岔图:参数扫描</div>
+<div>倍周期:通向混沌</div>
+<div>Feigenbaum常数:δ=4.669...</div>
+<div>普适性:临界指数</div>
+<div>重整化群:标度变换</div>
+<div>不动点:自相似</div>
+<div>临界慢化:发散弛豫</div>
+<div>涨落:临界乳光</div>
+<div>有限尺寸标度</div>
+<div>数值模拟:Monte Carlo</div>
+<div>Metropolis算法</div>
+<div>Wolff算法:团簇</div>
+<div>Wang-Landau:平坦直方图</div>
+<div>并行回火:副本交换</div>
+<div>分子动力学:Verlet</div>
+<div>Nosé-Hoover恒温器</div>
+<div>Parrinello-Rahman恒压器</div>
+<div>Ewald求和:长程</div>
+<div>PME:粒子网格</div>
+<div>截断:势能</div>
+<div>周期边界:PBC</div>
+<div>最小镜像约定</div>
+<div>邻居列表:Verlet列表</div>
+<div>cell列表:空间分割</div>
+<div>树算法:Barnes-Hut</div>
+<div>快速多极:FMM</div>
+<div>并行化:区域分解</div>
+<div>GPU加速:CUDA</div>
+<div>异构计算:CPU+GPU</div>
+<div>可扩展性:强/弱</div>
+<div>负载平衡:动态</div>
+<div>通信:MPI</div>
+<div>I/O:HDF5,NetCDF</div>
+<div>可视化:VMD,PyMOL</div>
+<div>分析:轨迹处理</div>
+<div>径向分布函数:g(r)</div>
+<div>结构因子:S(q)</div>
+<div>动力学结构因子:S(q,ω)</div>
+<div>中间散射函数:F(q,t)</div>
+<div>自关联函数:C(t)</div>
+<div>均方位移:MSD</div>
+<div>扩散系数:D=${(Math.abs(鼠标X*鼠标Y*1e-9)).toExponential(6)}m²/s</div>
+<div>粘度:η=${(Math.abs(鼠标X*0.001)).toFixed(8)}Pa·s</div>
+<div>Green-Kubo关系</div>
+<div>时间关联函数</div>
+<div>线性响应理论</div>
 <div>涨落-耗散定理</div>
-<div>时刻:${Date.now()}</div>
-<div>螺旋之舞:φ^${Math.floor(Math.abs(鼠标X*10+鼠标Y*10))}=${Math.pow(φ,Math.abs(鼠标X*10+鼠标Y*10)).toFixed(6)}</div>
-</div>
-`;
-  覆盖层元素.innerHTML=方程HTML;
-};
-
-const 动画循环=()=>{
-  requestAnimationFrame(动画循环);
-  
-  目标X+=(鼠标X-目标X)*0.05;
-  目标Y+=(鼠标Y-目标Y)*0.05;
-  
-  螺旋组.rotation.x=目标Y*0.5;
-  螺旋组.rotation.y+=0.003+目标X*0.015;
-  螺旋组.rotation.z=Math.sin(Date.now()*0.0001)*0.15;
-  
-  相机.position.x=Math.sin(Date.now()*0.0003)*80;
-  相机.position.y=Math.cos(Date.now()*0.0002)*50;
-  相机.lookAt(场景.position);
-  
-  螺旋组.children.forEach((子对象,索引)=>{
-    if(子对象.type==='Mesh'&&子对象.geometry.type==='SphereGeometry'){
-      子对象.rotation.x+=0.015;
-      子对象.rotation.y+=0.025;
-      const 时间=Date.now()*0.001;
-      子对象.position.y+=Math.sin(时间+索引)*0.08;
-      子对象.scale.setScalar(1+Math.sin(时间*2+索引)*0.15);
-    }
-  });
-  
-  更新方程显示();
-  渲染器.render(场景,相机);
-};
-
-window.addEventListener('load',()=>{
-  console.log("[v0] 页面加载完成");
-  if(typeof THREE!=='undefined'){
-    console.log("[v0] Three.js已加载");
-    初始化();
-  }else{
-    console.error("[v0] Three.js加载失败");
-    document.body.innerHTML='<div style="color:#f00;padding:20px;font-family:monospace">错误:Three.js库加载失败</div>';
-  }
-});
-</script>
-</body>
-</html>
+<div>Onsager倒易关系</div>
+<div>不可逆热力学</div>
+<div>熵产生:σ_s≥0</div>
+<div>最小熵产生原理</div>
+<div>Prigogine:耗散结构</div>
+<div>自组织:远离平衡</div>
+<div>Turing模式:反应-扩散</div>
+<div>形态发生:生物模式</div>
+<div>斑图形成:对流</div>
+<div>Rayleigh-Bénard对流</div>
+<div>Rayleigh数:Ra=${(Math.abs(鼠标X*鼠标Y*1e6)).toExponential(4)}</div>
+<div>对流胞:六角形</div>
+<div>振荡:Hopf分岔</div>
+<div>化学振荡:BZ反应</div>
+<div>Belousov-Zhabotinsky</div>
+<div>螺旋波:激发介质</div>
+<div>靶波:起搏中心</div>
+<div>时空混沌:扩展系统</div>
+<div>振幅方程:弱非线性</div>
+<div>Ginzburg-Landau方程</div>
+<div>Swift-Hohenberg方程</div>
+<div>Kuramoto-Sivashinsky方程</div>
+<div>非线性Schrödinger方程</div>
+<div>孤子:稳定波包</div>
+<div>KdV方程:浅水波</div>
+<div>sine-Gordon:拓扑孤子</div>
+<div>可积系统:无穷守恒律</div>
+<div>Lax对:等谱变形</div>
+<div>逆散射变换:IST</div>
+<div>Hirota双线性方法</div>
+<div>Bäcklund变换</div>
+<div>Darboux变换</div>
+<div>Painlevé性质:可积性</div>
+<div>代数几何:Riemann面</div>
+<div>theta函数:准周期</div>
+<div>有限gap积分:周期</div>
+<div>Toda晶格:离散</div>
+<div>量子可积:Bethe ansatz</div>
+<div>Yang-Baxter方程:R矩阵</div>
+<div>量子群:Hopf代数</div>
+<div>表示论:不可约表示</div>
+<div>Clebsch-Gordan分解</div>
+<div>6j符号:重耦合</div>
+<div>Racah-Wigner代数</div>
+<div>角动量理论</div>
+<div>群论:对称性</div>
+<div>Lie群:连续对称</div>
+<div>Lie代数:生成元</div>
+<div>结构常数:f_{abc}</div>
+<div>Cartan分类:单Lie代数</div>
+<div>根系统:Dynkin图</div>
+<div>权:表示标记</div>
+<div>最高权:不可约表示</div>
+<div>Weyl特征标公式</div>
+<div>Casimir算子:不变量</div>
+<div>指标:维数公式</div>
+<div>分支规则:子群约化</div>
+<div>张量积:Clebsch-Gordan</div>
+<div>Young图:对称群</div>
+<div>Schur-Weyl对偶</div>
+<div>Littlewood-Richardson规则</div>
+<div>Plethysm:复合表示</div>
+<div>特征标表:有限群</div>
+<div>正交关系:Schur引理</div>
+<div>诱导表示:Frobenius</div>
+<div>Mackey定理:约化</div>
+<div>投影表示:中心扩张</div>
+<div>Schur乘子:H²(G,U(1))</div>
+<div>上同调:群扩张</div>
+<div>拓扑:同伦,同调</div>
+<div>基本群:π₁(X)</div>
+<div>覆叠空间:万有覆叠</div>
+<div>同伦群:π_n(X)</div>
+<div>Hurewicz定理:同伦→同调</div>
+<div>同调群:H_n(X)</div>
+<div>上同调群:H^n(X)</div>
+<div>Poincaré对偶:H_k≅H^{n-k}</div>
+<div>Künneth公式:乘积空间</div>
+<div>Mayer-Vietoris序列</div>
+<div>谱序列:逐步计算</div>
+<div>Serre谱序列:纤维化</div>
+<div>Leray谱序列:层上同调</div>
+<div>示性类:向量丛不变量</div>
+<div>Chern类:复向量丛</div>
+<div>Stiefel-Whitney类:实向量丛</div>
+<div>Pontryagin类:定向丛</div>
+<div>Euler类:定向丛</div>
+<div>Chern特征:ch(E)∈H^*(X,ℚ)</div>
+<div>Todd类:td(X)</div>
+<div>Â类:Â(X)</div>
+<div>Riemann-Roch定理:指标</div>
+<div>Hirzebruch-Riemann-Roch</div>
+<div>Grothendieck-Riemann-Roch</div>
+<div>Atiyah-Singer指标定理</div>
+<div>ind(D)=∫_X Â(X)ch(E)</div>
+<div>热核:短时渐近</div>
+<div>局部指标定理</div>
+<div>K理论:向量丛等价类</div>
+<div>K⁰(X),K¹(X)</div>
+<div>Bott周期性:K^{n+2}≅K^n</div>
+<div>Thom同构</div>
+<div>Gysin序列</div>
+<div>Adams操作:ψ^k</div>
+<div>λ操作:外幂</div>
+<div>Chern特征:K→H</div>
+<div>拓扑指标:物理应用</div>
+<div>Chern数:量子霍尔</div>
+<div>Z₂不变量:拓扑绝缘体</div>
+<div>缠绕数:拓扑缺陷</div>
+<div>Pontryagin指标:瞬子</div>
+<div>Hopf不变量:纤维化</div>
+<div>链环数:纠缠</div>
+<div>Gauss链环积分</div>
+<div>Calugareanu定理:扭曲+缠绕</div>
+<div>DNA拓扑:超螺旋</div>
+<div>拓扑异构酶:解链</div>
+<div>纽结理论:不变量</div>
+<div>Reidemeister移动:等价</div>
+<div>Jones多项式:V(t)</div>
+<div>HOMFLY多项式:P(a,z)</div>
+<div>Kauffman多项式:F(a,z)</div>
+<div>Alexander多项式:Δ(t)</div>
+<div>纽结群:基本群</div>
+<div>纽结同调:Khovanov</div>
+<div>范畴化:同调提升</div>
+<div>量子不变量:Witten</div>
+<div>Chern-Simons理论:3维</div>
+<div>WRT不变量:3-流形</div>
+<div>手术:Dehn手术</div>
+<div>Kirby演算:图表示</div>
+<div>Heegaard分解:亏格</div>
+<div>双曲几何:负曲率</div>
+<div>Mostow刚性:唯一度规</div>
+<div>体积:拓扑不变量</div>
+<div>几何化猜想:Thurston</div>
+<div>Perelman证明:Ricci流</div>
+<div>Poincaré猜想:3-球</div>
+<div>4维拓扑:奇异性</div>
+<div>光滑结构:无穷多ℝ⁴</div>
+<div>Donaldson理论:规范论</div>
+<div>Seiberg-Witten理论</div>
+<div>Floer同调:无穷维Morse</div>
+<div>辛Floer同调:Lagrangian</div>
+<div>Heegaard Floer同调:3-流形</div>
+<div>嵌入接触同调:ECH</div>
+<div>辛几何:辛形式ω</div>
+<div>Darboux定理:局部标准</div>
+<div>辛流形:偶数维</div>
+<div>Lagrangian子流形:最大迷向</div>
+<div>Weinstein邻域:管状</div>
+<div>Moser引理:辛同胚</div>
+<div>Arnold猜想:不动点</div>
+<div>Gromov非压缩性</div>
+<div>辛容量:刚性</div>
+<div>伪全纯曲线:J-全纯</div>
+<div>Gromov-Witten不变量:模空间</div>
+<div>量子上同调:变形环</div>
+<div>Fukaya范畴:A_∞范畴</div>
+<div>Lagrangian Floer同调</div>
+<div>镜像对称:同调等价</div>
+<div>SYZ纤维化:T³</div>
+<div>热带几何:退化极限</div>
+<div>阿米巴:对数映射</div>
+<div>Maslov指标:相位</div>
+<div>生成函数:Legendrian</div>
+<div>接触几何:接触形式α</div>
+<div>Reeb向量场:核</div>
+<div>接触同调:柱形</div>
+<div>开书分解:页+装订</div>
+<div>Giroux对应:接触↔开书</div>
+<div>Legendrian纽结:前投影</div>
+<div>Thurston-Bennequin数</div>
+<div>旋转数:Maslov</div>
+<div>Chekanov-Eliashberg DGA</div>
+<div>增广:Lagrangian填充</div>
+<div>时刻戳:t=${时钟.toFixed(6)}s</div>
+<div>帧率:${(1000/(Date.now()-时钟*1000+16)).toFixed(2)}fps</div>
+<div>鼠标轨迹速度:v=${轨道速度.toFixed(6)}</div>
+<div>螺旋旋转:ω=${(螺旋组.rotation.y*10).toFixed(6)}rad/s</div>
+<div>相机距离:d=${Math.sqrt(parseFloat(x)**2+parseFloat(y)**2+parseFloat(z)**2).toFixed(4)}</div>
+<div>黄金螺旋之美:φ^∞→∞</div>
+<div>数学即宇宙语言</div>
+<div>一切皆数:Pythagoras</div>
+<div>上帝是数学家:Galileo</div>
+<div>数学之美:Hardy</div>
+<div>纯粹理性:Kant</div>
+<div>形式系统:Hilbert</div>
+<div>不完备性:Gödel</div>
+<div>可计算性:Turing</div>
+<div>算法信息:Kolmogorov</div>
+<div>混沌边缘:复杂性</div>
+<div>涌现:整体性</div>
+<div>还原论:基本粒子</div>
+<div>整体论:系统</div>
+<div>二元论:心物</div>
+<div>一元论:统一</div>
+<div>唯心:意识第一</div>
+<div>唯物:物质第一</div>
+<div>中道:相互依存</div>
+<div>空性:缘起</div>
+<div>实在:本体论</div>
+<div>认识:知识论</div>
+<div>真理:符合论</div>
+<div>美:和谐,对称</div>
+<div>善:道德律</div>
+<div>自由意志:决定论</div>
+<div>因果:必然性</div>
+<div>概率:偶然性</div>
+<div>信息:熵的对偶</div>
+<div>生命:负熵</div>
+<div>意识:整合信息</div>
+<div>智能:优化</div>
+<div>创造:新颖性</div>
+<div>进化:适应</div>
+<div>学习:归纳</div>
+<div>理解:压缩</div>
+<div>解释:因果模型</div>
+<div>预测:外推</div>
+<div>控制:反馈</div>
+<div>目的:优化目标</div>
+<div>价值:效用函数</div>
+<div>伦理:约束</div>
+<div>合作:博弈</div>
+<div>竞争:零和</div>
+<div>共生:正和</div>
+<div>涌现:层次</div>
+<div>还原:基础</div>
+<div>统一:理论</div>
+<div>多样:现象</div>
+<div>简单:优雅</div>
+<div>复杂:丰富</div>
+<div>秩序:结构</div>
+<div>混沌:随机</div>
+<div>确定:规律</div>
+<div>不确定:量子</div>
+<div>连续:微积分</div>
+<div>离散:组合</div>
+<div>有限:计算</div>
+<div>无限:极限</div>
+<div>收敛:稳定</div>
+<div>发散:不稳定</div>
+<div>线性:叠加</div>
+<div>非线性:涌现</div>
+<div>局域:近邻</div>
+<div>非局域:纠缠</div>
+<div>经典:宏观</div>
+<div>量子:微观</div>
+<div>相对论:时空</div>
+<div>绝对:牛顿</div>
+<div>场:连续介质</div>
+<div>粒子:量子化</div>
+<div>波:干涉</div>
+<div>波粒二象性</div>
+<div>互补原理:Bohr</div>
+<div>对应原理:经典极限</div>
+<div>等效原理:引力=加速度</div>
+<div>相对性原理:惯性系</div>
+<div>光速不变:c</div>
+<div>因果性:光锥</div>
+<div>局域性:无超光速</div>
+<div>幺正性:概率守恒</div>
+<div>厄米性:可观测量</div>
+<div>对称性:守恒律</div>
+<div>规范不变性:冗余</div>
+<div>重整化:标度</div>
+<div>普适性:临界</div>
+<div>涌现:相变</div>
+<div>自发破缺:真空</div>
+<div>拓扑:整体性质</div>
+<div>几何:局部性质</div>
+<div>代数:结构</div>
+<div>分析:极限</div>
+<div>数论:整数</div>
+<div>组合:计数</div>
+<div>概率:测度</div>
+<div>统计:推断</div>
+<div>逻辑:推理</div>
+<div>集合:基础</div>
+<div>范畴:态射</div>
+<div>函子:映射</div>
+<div>自然变换:态射间态射</div>
+<div>伴随:对偶</div>
+<div>极限:万有性质</div>
+<div>余极限:对偶极限</div>
+<div>Yoneda引理:嵌入</div>
+<div>表示:函子</div>
+<div>模:表示</div>
+<div>层:局部-整体</div>
+<div>凝聚层:代数几何</div>
+<div>概形:局部环空间</div>
+<div>栈:广群胚</div>
+<div>高阶范畴:∞-范畴</div>
+<div>同伦类型论:HoTT</div>
+<div>单值公理:∞-群胚</div>
+<div>类型:命题</div>
+<div>项:证明</div>
+<div>依赖类型:量化</div>
+<div>归纳类型:构造</div>
+<div>宇宙:类型的类型</div>
+<div>等价:同伦</div>
+<div>路径:相等</div>
+<div>高阶路径:相干</div>
+<div>截断:n-类型</div>
+<div>连通:路径连通</div>
+<div>基点:指定点</div>
+<div>圈空间:Ω(X,x₀)</div>
+<div>悬挂:ΣX</div>
+<div>伴随:Ω⊣Σ</div>
+<div>稳定:谱</div>
+<div>同伦范畴:Ho(Top)</div>
+<div>模型范畴:抽象同伦</div>
+<div>Quillen等价:导出等价</div>
+<div>简单集:组合模型</div>
+<div>拟范畴:∞-范畴</div>
+<div>Joyal模型结构</div>
+<div>∞-topos:高阶层</div>
+<div>导出代数几何:DAG</div>
+<div>导出栈:高阶模空间</div>
+<div>完美复形:对偶</div>
+<div>刚性:紧对象</div>
+<div>光滑:无穷小提升</div>
+<div>真:满射</div>
+<div>平坦:张量正合</div>
+<div>忠实平坦下降</div>
+<div>fpqc拓扑:忠实平坦拟紧</div>
+<div>étale拓扑:未分歧</div>
+<div>Grothendieck拓扑:覆盖</div>
+<div>site:范畴+拓扑</div>
+<div>topos:层范畴</div>
+<div>几何态射:逆像-直像</div>
+<div>点:几何态射Set→ℰ</div>
+<div>Barr定理:足够点</div>
+<div>内逻辑:topos中数学</div>
+<div>子对象分类子:Ω</div>
+<div>幂对象:指数</div>
+<div>自然数对象:ℕ</div>
+<div>选择公理:内部</div>
+<div>排中律:布尔topos</div>
+<div>直觉主义:非布尔</div>
+<div>构造数学:可计算</div>
+<div>Bishop:程序提取</div>
+<div>Martin-Löf类型论</div>
+<div>Curry-Howard同构:命题=类型</div>
+<div>证明=程序</div>
+<div>化简=计算</div>
+<div>归一化=终止</div>
+<div>强归一化:良基</div>
+<div>合流性:Church-Rosser</div>
+<div>类型保持:主题约简</div>
+<div>进展:良类型不卡住</div>
+<div>λ演算:函数抽象</div>
+<div>组合子:SKI</div>
+<div>不动点:Y组合子</div>
+<div>递归:μ算子</div>
+<div>Church数:λf.λx.f^n(x)</div>
+<div>Scott域:连续格</div>
+<div>指称语义:数学对象</div>
+<div>操作语义:状态转换</div>
+<div>公理语义:Hoare逻辑</div>
+<div>分离逻辑:堆推理</div>
+<div>并发:进程代数</div>
+<div>CCS:通信系统演算</div>
+<div>π演算:移动性</div>
+<div>会话类型:协议</div>
+<div>线性逻辑:资源敏感</div>
+<div>!指数:复制</div>
+<div>⊗张量:并行</div>
+<div>⊕加:选择</div>
+<div>&与:提供</div>
+<div>⊸线性蕴涵</div>
+<div>证明网:图形证明</div>
+<div>切消除:归一化</div>
+<div>Girard翻译:经典→直觉</div>
+<div>双重否定:¬¬A</div>
+<div>continuation:控制</div>
+<div>call/cc:捕获</div>
+<div>效应:副作用</div>
+<div>monad:计算结构</div>
+<div>Kleisli范畴:自由</div>
+<div>Eilenberg-Moore:代数</div>
+<div>adjunction:monad↔comonad</div>
+<div>代数效应:处理器</div>
+<div>effect系统:类型跟踪</div>
+<div>纯函数:无副作用</div>
+<div>引用透明:可替换</div>
+<div>惰性求值:按需</div>
+<div>严格求值:按值</div>
+<div>按名:传递表达式</div>
+<div>闭包:捕获环境</div>
+<div>高阶函数:函数参数</div>
+<div>柯里化:多参→单参</div>
+<div>部分应用:固定参数</div>
+<div>组合:函数复合</div>
+<div>管道:|></div>
+<div>映射:map</div>
+<div>过滤:filter</div>
+<div>折叠:fold/reduce</div>
+<div>展开:unfold</div>
+<div>zip:配对</div>
+<div>flatMap:bind</div>
+<div>applicative:⊛</div>
+<div>functor:fmap</div>
+<div>自然变换:多态</div>
+<div>参数化:泛型</div>
+<div>ad-hoc多态:重载</div>
+<div>子类型:继承</div>
+<div>协变:保持方向</div>
+<div>逆变:反转方向</div>
+<div>不变:固定</div>
+<div>型变:variance</div>
+<div>存在类型:∃</div>
+<div>全称类型:∀</div>
+<div>System F:二阶λ</div>
+<div>System Fω:高阶</div>
+<div>依赖类型:Π,Σ</div>
+<div>Π类型:依赖函数</div>
+<div>Σ类型:依赖对</div>
+<div>相等类型:Id</div>
+<div>路径归纳:J规则</div>
+<div>传输:沿路径</div>
+<div>函数外延:funext</div>
+<div>命题外延:propext</div>
+<div>商类型:等价类</div>
+<div>高阶归纳类型:HIT</div>
+<div>圆:S¹</div>
+<div>球:Sⁿ</div>
+<div>环面:T²</div>
+<div>实投影空间:ℝPⁿ</div>
+<div>截断:‖A‖_n</div>
+<div>命题截断:‖A‖</div>
+<div>集合截断:Set</div>
+<div>群胚:Groupoid</div>
+<div>∞-群胚:类型</div>
+<div>同伦层次:h-level</div>
+<div>收缩:可缩</div>
+<div>命题:h-prop</div>
+<div>集合:h-set</div>
+<div>群胚:h-groupoid</div>
+<div>单值:∞-群胚</div>
+<div>综合同伦论:内部</div>
+<div>公理化:HoTT</div>
+<div>计算:Cubical</div>
+<div>立方类型论:路径=区间</div>
+<div>De Morgan立方</div>
+<div>Cartesian立方</div>
+<div>连接:∧,∨</div>
+<div>反转:对称</div>
+<div>组合:传递</div>
+<div>填充:Kan操作</div>
+<div>组合:半单纯</div>
+<div>正规化:算法</div>
+<div>典范性:值</div>
+<div>判定性:算法</div>
+<div>可计算:有效</div>
+<div>构造:见证</div>
+<div>证明相关:信息</div>
+<div>证明无关:命题</div>
+<div>不可区分:相等</div>
+<div>可观察:行为</div>
+<div>外延:黑盒</div>
+<div>内涵:白盒</div>
+<div>抽象:接口</div>
+<div>实现:具体</div>
+<div>规范:契约</div>
+<div>精化:实现规范</div>
+<div>模拟:行为包含</div>
+<div>双模拟:行为等价</div>
+<div>互模拟:最大不动点</div>
+<div>余归纳:无穷对象</div>
+<div>流:无穷列表</div>
+<div>余递归:生产</div>
+<div>终结性:唯一态射</div>
+<div>始性:初始对象</div>
+<div>万有性质:表示</div>
+<div>伴随函子:最优近似</div>
+<div>单子:自函子范畴</div>
+<div>范畴即类型:对象=类型</div>
+<div>态射=项</div>
+<div>复合=应用</div>
+<div>恒等=变量</div>
+<div>积=对</div>
+<div>余积=和</div>
+<div>指数=函数</div>
+<div>子对象=子类型</div>
+<div>商对象=商类型</div>
+<div>等化子=相等</div>
+<div>余等化子=余相等</div>
+<div>拉回=依赖和</div>
+<div>推出=依赖积</div>
+<div>极限=全称</div>
+<div>余极限=存在</div>
+<div>Kan扩张=归纳原理</div>
+<div>终对象=单元类型</div>
+<div>始对象=空类型</div>
+<div>零对象=零类型</div>
+<div>核=等化子</div>
+<div>余核=余等化子</div>
+<div>正合=同调</div>
+<div>分裂=截面</div>
+<div>投影=收缩</div>
+<div>单射=嵌入</div>
+<div>满射=覆盖</div>
+<div>同构=等价</div>
+<div>自同构=对称</div>
+<div>自同态=自映射</div>
+<div>幂等=投影</div>
+<div>对合=自逆</div>
+<div>对偶=反向</div>
+<div>反范畴:态射反向</div>
+<div>对偶原理:自对偶</div>
+<div>Pontryagin对偶:交换群</div>
+<div>Fourier变换:对偶</div>
+<div>Langlands纲领:对偶</div>
+<div>镜像对称:几何对偶</div>
+<div>S对偶:强弱对偶</div>
+<div>T对偶:大小对偶</div>
+<div>电磁对偶:E↔B</div>
+<div>粒子-波对偶</div>
+<div>位置-动量对偶</div>
+<div>时间-能量对偶</div>
+<div>实空间-动量空间</div>
+<div>坐标-频率</div>
+<div>时域-频域</div>
+<div>Fourier对偶:互逆</div>
+<div>Laplace对偶:s↔t</div>
+<div>Legendre变换:凸对偶</div>
+<div>Fenchel对偶:凸优化</div>
+<div>Lagrange对偶:约束优化</div>
+<div>KKT条件:最优性</div>
+<div>强对偶:间隙=0</div>
+<div>弱对偶:下界</div>
+<div>Slater条件:强对偶</div>
+<div>凸优化:全局最优</div>
+<div>梯度下降:一阶</div>
+<div>牛顿法:二阶</div>
+<div>拟牛顿:近似Hessian</div>
+<div>共轭梯度:Krylov</div>
+<div>BFGS:秩2更新</div>
+<div>L-BFGS:有限内存</div>
+<div>信赖域:约束步长</div>
+<div>线搜索:Armijo</div>
+<div>Wolfe条件:充分下降</div>
+<div>收敛速度:线性/超线性/二次</div>
+<div>条件数:κ=${(1+Math.abs(鼠标X*10)).toFixed(6)}</div>
+<div>病态:大条件数</div>
+<div>预条件:改善条件数</div>
+<div>正则化:惩罚</div>
+<div>L1:稀疏</div>
+<div>L2:光滑</div>
+<div>弹性网:L1+L2</div>
+<div>Tikhonov:岭回归</div>
+<div>LASSO:L1回归</div>
+<div>组LASSO:结构化</div>
+<div>稀疏编码:字典学习</div>
+<div>压缩感知:欠定</div>
+<div>RIP:受限等距</div>
+<div>相干:字典</div>
+<div>贪婪:OMP</div>
+<div>凸松弛:L1</div>
+<div>重加权:迭代</div>
+<div>阈值:软/硬</div>
+<div>收缩:近端算子</div>
+<div>ADMM:交替方向</div>
+<div>对偶上升:Lagrange</div>
+<div>增广Lagrangian</div>
+<div>分裂:算子分裂</div>
+<div>Douglas-Rachford</div>
+<div>Peaceman-Rachford</div>
+<div>前向-后向:FISTA</div>
+<div>加速:Nesterov</div>
+<div>动量:惯性</div>
+<div>自适应:Adam</div>
+<div>学习率:步长</div>
+<div>退火:衰减</div>
+<div>warm restart:周期</div>
+<div>批量:mini-batch</div>
+<div>随机:SGD</div>
+<div>方差缩减:SVRG</div>
+<div>重要性采样:加权</div>
+<div>经验风险:训练误差</div>
+<div>泛化:测试误差</div>
+<div>过拟合:高方差</div>
+<div>欠拟合:高偏差</div>
+<div>偏差-方差权衡</div>
+<div>交叉验证:k-fold</div>
+<div>留一:LOOCV</div>
+<div>自助:bootstrap</div>
+<div>集成:bagging</div>
+<div>boosting:AdaBoost</div>
+<div>梯度提升:GBDT</div>
+<div>XGBoost:正则化</div>
+<div>LightGBM:直方图</div>
+<div>CatBoost:类别</div>
+<div>随机森林:决策树</div>
+<div>特征重要性:Gini</div>
+<div>剪枝:复杂度</div>
+<div>深度:过拟合</div>
+<div>宽度:表达力</div>
+<div>激活:非线性</div>
+<div>ReLU:max(0,x)</div>
+<div>sigmoid:1/(1+e^(-x))</div>
+<div>tanh:双曲正切</div>
+<div>GELU:高斯误差</div>
+<div>Swish:x·sigmoid(x)</div>
+<div>Mish:x·tanh(softplus(x))</div>
+<div>初始化:Xavier</div>
+<div>He初始化:ReLU</div>
+<div>正交:保持范数</div>
+<div>批归一化:标准化</div>
+<div>层归一化:LayerNorm</div>
+<div>组归一化:GroupNorm</div>
+<div>实例归一化:风格</div>
+<div>权重归一化:解耦</div>
+<div>谱归一化:Lipschitz</div>
+<div>dropout:p=${(0.5-Math.abs(鼠标X*0.2)).toFixed(4)}</div>
+<div>DropConnect:权重</div>
+<div>随机深度:层</div>
+<div>数据增强:变换</div>
+<div>Mixup:凸组合</div>
+<div>CutMix:剪切粘贴</div>
+<div>AugMax:对抗</div>
+<div>AutoAugment:搜索</div>
+<div>RandAugment:随机</div>
+<div>标签平滑:软标签</div>
+<div>知识蒸馏:教师-学生</div>
+<div>自蒸馏:自己教自己</div>
+<div>对比学习:拉近推远</div>
+<div>SimCLR:简单框架</div>
+<div>MoCo:动量对比</div>
+<div>BYOL:无负样本</div>
+<div>SimSiam:简单孪生</div>
+<div>SwAV:聚类</div>
+<div>DINO:自蒸馏</div>
+<div>MAE:掩码自编码</div>
+<div>BEiT:BERT预训练</div>
+<div>视觉Transformer:ViT</div>
+<div>patch嵌入:16×16</div>
+<div>位置编码:可学习</div>
+<div>CLS token:分类</div>
+<div>多头注意力:并行</div>
+<div>Q,K,V:查询键值</div>
+<div>缩放点积:√d_k</div>
+<div>softmax:归一化</div>
+<div>前馈:MLP</div>
+<div>残差:跳跃连接</div>
+<div>预归一化:稳定</div>
+<div>后归一化:原始</div>
+<div>Swin:窗口注意力</div>
+<div>移位窗口:跨窗口</div>
+<div>层次:金字塔</div>
+<div>ConvNeXt:现代化CNN</div>
+<div>深度可分离:效率</div>
+<div>逐点:1×1卷积</div>
+<div>分组:通道分组</div>
+<div>瓶颈:降维-升维</div>
+<div>倒残差:MobileNet</div>
+<div>SE模块:通道注意力</div>
+<div>CBAM:空间+通道</div>
+<div>ECA:高效通道</div>
+<div>非局部:自注意力</div>
+<div>GCNet:全局上下文</div>
+<div>FPN:特征金字塔</div>
+<div>PANet:路径聚合</div>
+<div>BiFPN:双向</div>
+<div>NAS:神经架构搜索</div>
+<div>DARTS:可微</div>
+<div>ENAS:参数共享</div>
+<div>ProxylessNAS:直接</div>
+<div>EfficientNet:复合缩放</div>
+<div>宽度×深度×分辨率</div>
+<div>AutoML:自动化</div>
+<div>超参数优化:HPO</div>
+<div>贝叶斯优化:高斯过程</div>
+<div>TPE:树Parzen估计</div>
+<div>Hyperband:早停</div>
+<div>BOHB:结合</div>
+<div>神经预测器:代理</div>
+<div>零成本代理:无训练</div>
+<div>权重共享:超网</div>
+<div>one-shot:单次训练</div>
+<div>渐进:逐步</div>
+<div>进化:遗传算法</div>
+<div>突变:随机变化</div>
+<div>交叉:重组</div>
+<div>选择:适应度</div>
+<div>种群:多样性</div>
+<div>代:迭代</div>
+<div>收敛:最优</div>
+<div>局部最优:陷阱</div>
+<div>全局最优:目标</div>
+<div>多峰:多个最优</div>
+<div>平坦:高原</div>
+<div>崎岖:噪声</div>
+<div>景观:适应度地形</div>
+<div>探索:广度</div>
+<div>利用:深度</div>
+<div>探索-利用权衡</div>
+<div>ε-贪婪:随机探索</div>
+<div>UCB:置信上界</div>
+<div>Thompson采样:后验</div>
+<div>信息增益:熵减</div>
+<div>预期改进:EI</div>
+<div>改进概率:PI</div>
+<div>获取函数:选择</div>
+<div>代理模型:近似</div>
+<div>高斯过程:GP</div>
+<div>核:协方差</div>
+<div>RBF:径向基</div>
+<div>Matérn:光滑度</div>
+<div>周期:季节性</div>
+<div>线性:趋势</div>
+<div>组合:加/乘</div>
+<div>超参数:长度尺度</div>
+<div>边际似然:证据</div>
+<div>后验:更新</div>
+<div>预测:不确定性</div>
+<div>方差:认知不确定性</div>
+<div>噪声:偶然不确定性</div>
+<div>校准:可靠性</div>
+<div>置信区间:覆盖</div>
+<div>预测区间:未来</div>
+<div>分位数:百分位</div>
+<div>概率预测:分布</div>
+<div>点预测:期望</div>
+<div>区间预测:范围</div>
+<div>集合预测:多个</div>
+<div>概率校准:Platt</div>
+<div>温度缩放:后处理</div>
+<div>保序回归:单调</div>
+<div>Brier分数:概率</div>
+<div>对数损失:交叉熵</div>
+<div>准确率:正确率</div>
+<div>精确率:查准率</div>
+<div>召回率:查全率</div>
+<div>F1分数:调和平均</div>
+<div>ROC曲线:TPR-FPR</div>
+<div>AUC:曲线下面积</div>
+<div>PR曲线:精确率-召回率</div>
+<div>AP:平均精度</div>
+<div>mAP:多类平均</div>
+<div>混淆矩阵:TP,FP,TN,FN</div>
+<div>灵敏度:真阳性率</div>
+<div>特异度:真阴性率</div>
+<div>阳性预测值:PPV</div>
+<div>阴性预测值:NPV</div>
+<div>似然比:LR+,LR-</div>
+<div>优势比:OR</div>
+<div>相对风险:RR</div>
+<div>风险差:RD</div>
+<div>归因风险:AR</div>
+<div>人群归因风险:PAR</div>
+<div>需治疗数:NNT</div>
+<div>需伤害数:NNH</div>
+<div>效应量:Cohen's d</div>
+<div>相关系数:Pearson r</div>
+<div>Spearman ρ:秩相关</div>
+<div>Kendall τ:一致性</div>
+<div>互信息:I(X;Y)</div>
+<div>条件互信息:I(X;Y|Z)</div>
+<div>传递信息:信息流</div>
+<div>因果效应:do演算</div>
+<div>干预:do(X=x)</div>
+<div>反事实:潜在结果</div>
+<div>平均处理效应:ATE</div>
+<div>条件ATE:CATE</div>
+<div>个体TE:ITE</div>
+<div>倾向得分:e(X)</div>
+<div>逆概率加权:IPW</div>
+<div>双重稳健:DR</div>
+<div>工具变量:IV</div>
+<div>回归不连续:RDD</div>
+<div>双重差分:DID</div>
+<div>合成控制:SCM</div>
+<div>匹配:配对</div>
+<div>分层:子组</div>
+<div>标准化:调整</div>
+<div>元分析:综合</div>
+<div>异质性:I²</div>
+<div>发表偏倚:漏斗图</div>
+<div>敏感性分析:稳健性</div>
+<div>子组分析:交互</div>
+<div>中介分析:路径</div>
+<div>调节分析:交互效应</div>
+<div>结构方程:SEM</div>
+<div>路径分析:直接/间接</div>
+<div>潜变量:因子</div>
+<div>测量模型:CFA</div>
+<div>结构模型:路径</div>
+<div>拟合指数:CFI,TLI,RMSEA</div>
+<div>修正指数:MI</div>
+<div>多组:不变性</div>
+<div>纵向:增长曲线</div>
+<div>时间序列:ARIMA</div>
+<div>自回归:AR(p)</div>
+<div>移动平均:MA(q)</div>
+<div>差分:I(d)</div>
+<div>季节性:SARIMA</div>
+<div>GARCH:波动率</div>
+<div>协整:长期关系</div>
+<div>Granger因果:预测</div>
+<div>VAR:向量自回归</div>
+<div>脉冲响应:IRF</div>
+<div>方差分解:VD</div>
+<div>状态空间:Kalman滤波</div>
+<div>隐马尔可夫:HMM</div>
+<div>Viterbi:最优路径</div>
+<div>前向-后向:概率</div>
+<div>Baum-Welch:EM</div>
+<div>条件随机场:CRF</div>
+<div>最大熵:MaxEnt</div>
+<div>结构化预测:序列</div>
+<div>序列标注:NER,POS</div>
+<div>分词:tokenization</div>
+<div>词嵌入:Word2Vec</div>
+<div>CBOW:上下文预测</div>
+<div>Skip-gram:预测上下文</div>
+<div>负采样:高效</div>
+<div>GloVe:全局向量</div>
+<div>FastText:子词</div>
+<div>ELMo:上下文</div>
+<div>BERT:双向编码</div>
+<div>掩码语言模型:MLM</div>
+<div>下句预测:NSP</div>
+<div>预训练-微调:范式</div>
+<div>GPT:生成预训练</div>
+<div>自回归:从左到右</div>
+<div>因果语言模型:CLM</div>
+<div>提示:prompt</div>
+<div>上下文学习:ICL</div>
+<div>指令微调:instruction</div>
+<div>RLHF:人类反馈</div>
+<div>奖励模型:偏好</div>
+<div>PPO:策略优化</div>
+<div>KL惩罚:约束</div>
+<div>价值函数:V,Q</div>
+<div>优势:A=Q-V</div>
+<div>TD误差:时序差分</div>
+<div>蒙特卡洛:完整回报</div>
+<div>自举:bootstrap</div>
+<div>资格迹:λ-return</div>
+<div>on-policy:同策略</div>
+<div>off-policy:异策略</div>
+<div>重要性采样:修正</div>
+<div>经验回放:replay buffer</div>
+<div>优先级:prioritized</div>
+<div>DQN:深度Q网络</div>
+<div>目标网络:稳定</div>
+<div>双Q学习:过估计</div>
+<div>Dueling:分解Q</div>
+<div>Rainbow:组合改进</div>
+<div>A3C:异步优势</div>
+<div>IMPALA:重要性加权</div>
+<div>分布式:并行</div>
+<div>Ape-X:优先级分布式</div>
+<div>R2D2:循环</div>
+<div>Agent57:探索</div>
+<div>MuZero:模型学习</div>
+<div>AlphaZero:自对弈</div>
+<div>MCTS:蒙特卡洛树</div>
+<div>UCT:置信上界树</div>
+<div>扩展:选择</div>
+<div>模拟:rollout</div>
+<div>回传:更新</div>
+<div>策略网络:先验</div>
+<div>价值网络:评估</div>
+<div>自对弈:数据生成</div>
+<div>课程学习:由易到难</div>
+<div>多任务:共享表示</div>
+<div>迁移学习:知识复用</div>
+<div>域适应:分布偏移</div>
+<div>零样本:未见类</div>
+<div>少样本:N-way K-shot</div>
+<div>元学习:学习学习</div>
+<div>MAML:模型无关</div>
+<div>Reptile:一阶</div>
+<div>原型网络:度量学习</div>
+<div>匹配网络:注意力</div>
+<div>关系网络:可学习度量</div>
+<div>记
