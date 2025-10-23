@@ -1,177 +1,685 @@
-```html
-<!doctype html>
-<html lang="zh">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>斐波那契 3D 螺旋</title>
+<meta charset="UTF-8">
 <style>
-html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:serif}
-#c{width:100%;height:100%;display:block}
-#hud{
-  position:absolute;left:12px;top:12px;color:#9cffb3;font-size:16px;
-  background:rgba(0,0,0,0.38);padding:10px;border-radius:8px;backdrop-filter:blur(4px);
-  line-height:1.35;white-space:pre-wrap;
-  pointer-events:none;
-}
-.eq{color:#ffd387;font-weight:700}
+*{margin:0;padding:0;overflow:hidden}body{background:#000}canvas{display:block}#覆盖层{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'SimSun',serif;color:#0ff;font-size:12px;line-height:1.6;text-shadow:0 0 10px #0ff;padding:10px;box-sizing:border-box;z-index:1000}
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="hud" aria-hidden="true"><span class="eq" id="eq">加载中…</span></div>
+<div id="覆盖层"></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script>
-/* 单文件实现：WebGL 点云呈现菲波那契螺旋，鼠标控制相机，移动时显示中文数学公式（x,y 轴调整） */
-/* 极简 WebGL helper + 粒子系统，所有资源内联，无外部依赖。*/
+console.log("[v0] 初始化开始");
+const φ=1.618033988749895,τ=6.283185307179586,π=3.141592653589793,黄金角=137.5077640500378*π/180;
+let 场景,相机,渲染器,螺旋组,鼠标X=0,鼠标Y=0,目标X=0,目标Y=0,覆盖层元素;
 
-/* ---------- GL 初始 ---------- */
-const canvas=document.getElementById('c');
-const gl=canvas.getContext('webgl',{antialias:true})||canvas.getContext('experimental-webgl');
-if(!gl){ alert('无法初始化 WebGL'); throw 0; }
-function resize(){
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  const w=Math.floor(innerWidth*dpr), h=Math.floor(innerHeight*dpr);
-  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px'; gl.viewport(0,0,w,h); }
-}
-addEventListener('resize',resize); resize();
+const 计算斐波那契=(n)=>{if(n<=1)return n;let a=0,b=1;for(let i=2;i<=n;i++){let t=a+b;a=b;b=t}return b};
 
-/* ---------- 着色器 ---------- */
-const vs=`attribute vec3 aPos;attribute float aSize;attribute vec3 aCol;uniform mat4 uPV;varying vec3 vCol;void main(){vCol=aCol;gl_Position=uPV*vec4(aPos,1.0);gl_PointSize=aSize;}`;
-const fs=`precision mediump float;varying vec3 vCol;void main(){vec2 c=gl_PointCoord-0.5;float r=length(c);float a=smoothstep(0.5,0.45,r);gl_FragColor=vec4(vCol,a);}`;
-function compile(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));}return s;}
-function link(gl,vsSrc,fsSrc){const v=compile(gl,gl.VERTEX_SHADER,vsSrc);const f=compile(gl,gl.FRAGMENT_SHADER,fsSrc);const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(p));return p;}
-const prog=link(gl,vs,fs);gl.useProgram(prog);
-const aPos=gl.getAttribLocation(prog,'aPos');
-const aSize=gl.getAttribLocation(prog,'aSize');
-const aCol=gl.getAttribLocation(prog,'aCol');
-const uPV=gl.getUniformLocation(prog,'uPV');
+const 初始化=()=>{
+  console.log("[v0] 创建场景");
+  场景=new THREE.Scene();
+  相机=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,10000);
+  相机.position.set(0,0,500);
+  
+  渲染器=new THREE.WebGLRenderer({antialias:true,alpha:false});
+  渲染器.setSize(window.innerWidth,window.innerHeight);
+  渲染器.setClearColor(0x000000,1);
+  document.body.appendChild(渲染器.domElement);
+  console.log("[v0] 渲染器已添加");
+  
+  覆盖层元素=document.getElementById('覆盖层');
+  螺旋组=new THREE.Group();
+  场景.add(螺旋组);
+  
+  const 环境光=new THREE.AmbientLight(0x404040,3);
+  场景.add(环境光);
+  
+  const 点光源1=new THREE.PointLight(0x00ffff,3,2000);
+  点光源1.position.set(300,300,300);
+  场景.add(点光源1);
+  
+  const 点光源2=new THREE.PointLight(0xff00ff,3,2000);
+  点光源2.position.set(-300,-300,300);
+  场景.add(点光源2);
+  
+  const 点光源3=new THREE.PointLight(0xffff00,2,2000);
+  点光源3.position.set(0,300,-300);
+  场景.add(点光源3);
+  
+  生成斐波那契螺旋();
+  console.log("[v0] 螺旋已生成");
+  
+  document.addEventListener('mousemove',鼠标移动);
+  window.addEventListener('resize',窗口调整);
+  
+  动画循环();
+  console.log("[v0] 动画循环已启动");
+};
 
-/* ---------- 数据生成：菲波那契螺旋 ---------- */
-function genPoints(n){
-  const positions=new Float32Array(n*3);
-  const sizes=new Float32Array(n);
-  const colors=new Float32Array(n*3);
-  const goldenAngle=2.399963229728653;
-  for(let i=0;i<n;i++){
-    const t=i;
-    const angle=t*goldenAngle + Math.sin(t*0.013)*0.6;
-    const radius=Math.pow(t+1,0.52)*0.72;
-    const x=Math.cos(angle)*radius;
-    const y=Math.sin(angle)*radius;
-    const z=(t - n/2)*0.2 + Math.sin(t*0.021)*2.0;
-    positions[3*i]=x;
-    positions[3*i+1]=y;
-    positions[3*i+2]=z;
-    sizes[i]=4.0 + (Math.sin(t*0.045)+1.0)*3.5;
-    const r=0.5+0.5*Math.sin(t*0.02);
-    const g=0.3+0.7*Math.sin(t*0.011+2.0);
-    const b=0.4+0.6*Math.cos(t*0.017);
-    colors[3*i]=r; colors[3*i+1]=g; colors[3*i+2]=b;
+const 生成斐波那契螺旋=()=>{
+  const 点数组=[],迭代次数=1500,缩放因子=0.6;
+  
+  for(let i=0;i<迭代次数;i++){
+    const θ=i*黄金角,r=缩放因子*Math.sqrt(i),x=r*Math.cos(θ),y=r*Math.sin(θ),z=i*0.12-180;
+    点数组.push(new THREE.Vector3(x,y,z));
   }
-  return {positions,sizes,colors};
-}
-const N=6000;
-const {positions,sizes,colors}=genPoints(N);
-
-/* ---------- 缓冲绑定 ---------- */
-const posBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,posBuf); gl.bufferData(gl.ARRAY_BUFFER,positions,gl.STATIC_DRAW);
-const sizeBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,sizeBuf); gl.bufferData(gl.ARRAY_BUFFER,sizes,gl.STATIC_DRAW);
-const colBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,colBuf); gl.bufferData(gl.ARRAY_BUFFER,colors,gl.STATIC_DRAW);
-
-/* ---------- 相机与交互 ---------- */
-let camZ=120; let rotX=0, rotY=0; let targetX=0, targetY=0;
-const hudEq=document.getElementById('eq');
-function updateEq(x,y){
-  // 显示中文数学公式（LaTeX 风格字符展示为纯文本中文描述）
-  // 动态公式依赖 x,y（摄像机目标）
-  const fx = (x).toFixed(3);
-  const fy = (y).toFixed(3);
-  // 复杂数学表达式（中文）
-  const s = "x' = x·cosθ - y·sinθ\ny' = x·sinθ + y·cosθ\nθ(x,y) = arctan\\left(\\frac{y}{x}\\right) + 0.5·e^{-(" + fx + "·x^2 + " + fy + "·y^2)}";
-  hudEq.textContent = s;
-}
-canvas.addEventListener('mousemove', (e)=>{
-  const r=canvas.getBoundingClientRect();
-  const mx=(e.clientX - r.left)/r.width;
-  const my=(e.clientY - r.top)/r.height;
-  rotY = (mx-0.5)*Math.PI*1.2;
-  rotX = (my-0.5)*Math.PI*0.7;
-  targetX = (mx-0.5)*40;
-  targetY = (0.5-my)*40;
-  updateEq(targetX,targetY);
-});
-canvas.addEventListener('wheel', (e)=>{ e.preventDefault(); camZ += Math.sign(e.deltaY)*8; camZ = Math.max(20,Math.min(600,camZ)); }, {passive:false});
-
-/* ---------- 矩阵工具（最小） ---------- */
-function mat4_perspective(fov, aspect, near, far){
-  const f = 1.0/Math.tan(fov/2);
-  const nf = 1/(near - far);
-  const out = new Float32Array(16);
-  out[0]=f/aspect; out[1]=0; out[2]=0; out[3]=0;
-  out[4]=0; out[5]=f; out[6]=0; out[7]=0;
-  out[8]=0; out[9]=0; out[10]=(far+near)*nf; out[11]=-1;
-  out[12]=0; out[13]=0; out[14]=(2*far*near)*nf; out[15]=0;
-  return out;
-}
-function mat4_mul(a,b){
-  const out=new Float32Array(16);
-  for(let i=0;i<4;i++){
-    for(let j=0;j<4;j++){
-      let s=0;
-      for(let k=0;k<4;k++) s+=a[k*4+j]*b[i*4+k];
-      out[i*4+j]=s;
+  
+  const 曲线=new THREE.CatmullRomCurve3(点数组);
+  const 管道几何=new THREE.TubeGeometry(曲线,点数组.length*2,0.4,8,false);
+  const 材质1=new THREE.MeshPhongMaterial({
+    color:0x00ffff,
+    emissive:0x004444,
+    shininess:100,
+    transparent:true,
+    opacity:0.9
+  });
+  const 网格1=new THREE.Mesh(管道几何,材质1);
+  螺旋组.add(网格1);
+  
+  for(let i=0;i<迭代次数;i+=8){
+    const 点=点数组[i];
+    const 球体几何=new THREE.SphereGeometry(1.2+Math.sin(i*0.1)*0.6,12,12);
+    const 色相=i/迭代次数;
+    const 材质=new THREE.MeshPhongMaterial({
+      color:new THREE.Color().setHSL(色相,1,0.6),
+      emissive:new THREE.Color().setHSL(色相,1,0.3),
+      shininess:100
+    });
+    const 球体=new THREE.Mesh(球体几何,材质);
+    球体.position.copy(点);
+    球体.userData={索引:i};
+    螺旋组.add(球体);
+  }
+  
+  const 线几何=new THREE.BufferGeometry().setFromPoints(点数组);
+  const 线材质=new THREE.LineBasicMaterial({
+    color:0xff00ff,
+    transparent:true,
+    opacity:0.4
+  });
+  const 线=new THREE.Line(线几何,线材质);
+  螺旋组.add(线);
+  
+  for(let j=0;j<4;j++){
+    const 偏移角=j*τ/4;
+    const 额外点数组=[];
+    for(let i=0;i<迭代次数;i+=3){
+      const θ=i*黄金角+偏移角;
+      const r=缩放因子*Math.sqrt(i)*φ*0.7;
+      const x=r*Math.cos(θ);
+      const y=r*Math.sin(θ);
+      const z=i*0.12-180+j*30;
+      额外点数组.push(new THREE.Vector3(x,y,z));
     }
+    const 额外线几何=new THREE.BufferGeometry().setFromPoints(额外点数组);
+    const 额外线材质=new THREE.LineBasicMaterial({
+      color:new THREE.Color().setHSL(j/4,0.8,0.5),
+      transparent:true,
+      opacity:0.25
+    });
+    const 额外线=new THREE.Line(额外线几何,额外线材质);
+    螺旋组.add(额外线);
   }
-  return out;
-}
-function mat4_translate(tx,ty,tz){
-  const m=new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, tx,ty,tz,1]);
-  return m;
-}
-function mat4_rotateX(a){
-  const c=Math.cos(a), s=Math.sin(a);
-  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);
-}
-function mat4_rotateY(a){
-  const c=Math.cos(a), s=Math.sin(a);
-  return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);
-}
+};
 
-/* ---------- 渲染循环 ---------- */
-gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-gl.disable(gl.DEPTH_TEST);
+const 鼠标移动=(事件)=>{
+  鼠标X=(事件.clientX/window.innerWidth)*2-1;
+  鼠标Y=-(事件.clientY/window.innerHeight)*2+1;
+};
 
-function render(t){
-  resize();
-  gl.clearColor(0.02,0.02,0.02,1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+const 窗口调整=()=>{
+  相机.aspect=window.innerWidth/window.innerHeight;
+  相机.updateProjectionMatrix();
+  渲染器.setSize(window.innerWidth,window.innerHeight);
+};
 
-  // 视图投影矩阵
-  const aspect = canvas.width / canvas.height;
-  const proj = mat4_perspective(45*Math.PI/180, aspect, 0.1, 2000);
-  // camera transform: translate back by camZ, then rotate by rotX/Y, then translate to target
-  const tr = mat4_translate(-targetX, -targetY, -camZ);
-  const ry = mat4_rotateY(rotY + Math.sin(t*0.0003)*0.02);
-  const rx = mat4_rotateX(rotX + Math.cos(t*0.0002)*0.02);
-  const view = mat4_mul(rx, ry);
-  const pv = mat4_mul(proj, mat4_mul(view, tr));
-  gl.uniformMatrix4fv(uPV,false,pv);
+const 更新方程显示=()=>{
+  const x轴=相机.position.x.toFixed(2);
+  const y轴=相机.position.y.toFixed(2);
+  const z轴=相机.position.z.toFixed(2);
+  const 旋转角=螺旋组.rotation.y;
+  const 当前斐波那契=计算斐波那契(Math.floor(Math.abs(鼠标X*20)+Math.abs(鼠标Y*20)));
+  const 黄金比例计算=Math.pow(φ,Math.abs(鼠标X+鼠标Y));
+  
+  const 方程HTML=`
+<div style="columns:2;column-gap:20px;font-size:11px">
+<div>φ=(1+√5)/2=${φ.toFixed(10)}</div>
+<div>黄金角=2π(1-1/φ)=${(黄金角*180/π).toFixed(6)}°</div>
+<div>斐波那契递推:F(n)=F(n-1)+F(n-2)</div>
+<div>F(${Math.floor(Math.abs(鼠标X*20)+Math.abs(鼠标Y*20))})=${当前斐波那契}</div>
+<div>螺旋参数:r(θ)=a·e^(b·θ)</div>
+<div>x(θ)=${(Math.sqrt(Math.abs(鼠标X*10)+1)*Math.cos(旋转角)).toFixed(4)}</div>
+<div>y(θ)=${(Math.sqrt(Math.abs(鼠标Y*10)+1)*Math.sin(旋转角)).toFixed(4)}</div>
+<div>相机:(${x轴},${y轴},${z轴})</div>
+<div>φ^(|x|+|y|)=${黄金比例计算.toFixed(6)}</div>
+<div>欧拉公式:e^(iπ)+1=0</div>
+<div>z=r·e^(iθ)=${Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y).toFixed(4)}·e^(i·${Math.atan2(鼠标Y,鼠标X).toFixed(4)})</div>
+<div>黄金矩形:${(Math.abs(鼠标X)*φ).toFixed(4)}:${Math.abs(鼠标X).toFixed(4)}</div>
+<div>增长率:ln(φ)/π·2=${(Math.log(φ)/π*2).toFixed(6)}</div>
+<div>角动量:L=r×p=${(鼠标X*鼠标Y*100).toFixed(4)}</div>
+<div>拉格朗日:L=T-V</div>
+<div>哈密顿:H=${(Math.abs(鼠标X*100+鼠标Y*100)).toFixed(4)}</div>
+<div>薛定谔:iℏ∂ψ/∂t=Ĥψ</div>
+<div>波函数:ψ(r,θ)=R(r)·Θ(θ)·e^(imφ)</div>
+<div>概率密度:P(r)=${(Math.pow(Math.sqrt(鼠标X*鼠标X+鼠标Y*鼠标Y),2)*0.1).toFixed(6)}</div>
+<div>角频率:ω=${(旋转角*10).toFixed(4)}rad/s</div>
+<div>傅里叶:F(ω)=∫f(t)e^(-iωt)dt</div>
+<div>拉普拉斯:∇²φ=∂²φ/∂x²+∂²φ/∂y²+∂²φ/∂z²</div>
+<div>梯度:∇f=(${鼠标X.toFixed(4)},${鼠标Y.toFixed(4)},${(鼠标X+鼠标Y).toFixed(4)})</div>
+<div>散度:∇·F=${(鼠标X*2+鼠标Y*2).toFixed(4)}</div>
+<div>旋度:∇×F=(${(鼠标Y-鼠标X).toFixed(4)},${鼠标X.toFixed(4)},${(-鼠标Y).toFixed(4)})</div>
+<div>麦克斯韦:∇·E=ρ/ε₀,∇·B=0</div>
+<div>∇×E=-∂B/∂t,∇×B=μ₀J+μ₀ε₀∂E/∂t</div>
+<div>洛伦兹力:F=q(E+v×B)</div>
+<div>相对论:E²=(pc)²+(mc²)²=${Math.pow(Math.abs(鼠标X*100),2)+Math.pow(Math.abs(鼠标Y*100),2)}</div>
+<div>时空:ds²=-c²dt²+dx²+dy²+dz²</div>
+<div>史瓦西:r_s=2GM/c²=${(Math.abs(鼠标X*鼠标Y)*10).toFixed(6)}</div>
+<div>霍金辐射:T=ℏc³/(8πGMk_B)</div>
+<div>熵:S=k_B·ln(Ω)=${(Math.log(Math.abs(鼠标X*100+鼠标Y*100)+1)*1.381).toFixed(6)}</div>
+<div>配分函数:Z=Σe^(-E_i/k_BT)=${Math.exp(-Math.abs(鼠标X+鼠标Y)).toFixed(6)}</div>
+<div>自由能:F=-k_BT·ln(Z)=${(-Math.log(Math.exp(-Math.abs(鼠标X+鼠标Y)))).toFixed(6)}</div>
+<div>黎曼ζ:ζ(s)=Σ(1/n^s)</div>
+<div>伽马:Γ(n)=(n-1)!=${Math.abs(鼠标X*10).toFixed(4)}</div>
+<div>贝塞尔:J_n(x)在x=${Math.abs(鼠标X*10).toFixed(4)}</div>
+<div>勒让德:P_n(cosθ)在θ=${旋转角.toFixed(4)}</div>
+<div>球谐:Y_l^m(θ,φ)=N·P_l^m(cosθ)·e^(imφ)</div>
+<div>泊松:∇²φ=-ρ/ε₀=${(-鼠标X*鼠标Y*10).toFixed(4)}</div>
+<div>纳维-斯托克斯:ρ(∂v/∂t+v·∇v)=-∇p+μ∇²v+f</div>
+<div>连续性:∂ρ/∂t+∇·(ρv)=0</div>
+<div>伯努利:p+½ρv²+ρgh=常数</div>
+<div>雷诺数:Re=${(Math.abs(鼠标X*鼠标Y)*1000).toFixed(2)}</div>
+<div>普朗克:h=${(6.626e-34).toExponential(6)}J·s</div>
+<div>精细结构:α≈1/137.036</div>
+<div>宇宙学常数:Λ=${(Math.abs(鼠标X*鼠标Y)*1e-52).toExponential(4)}m⁻²</div>
+<div>哈勃:H₀≈70km·s⁻¹·Mpc⁻¹</div>
+<div>弗里德曼:(ȧ/a)²=8πGρ/3-k/a²</div>
+<div>度规:g_μν=diag(-1,1,1,1)</div>
+<div>测地线:d²x^μ/dτ²+Γ^μ_αβ(dx^α/dτ)(dx^β/dτ)=0</div>
+<div>爱因斯坦:R_μν-½Rg_μν+Λg_μν=8πG/c⁴·T_μν</div>
+<div>克里斯托费尔:Γ^λ_μν=½g^λσ(∂_μg_νσ+∂_νg_μσ-∂_σg_μν)</div>
+<div>里奇:R_μν=R^λ_μλν</div>
+<div>里奇标量:R=g^μνR_μν=${(鼠标X*鼠标X+鼠标Y*鼠标Y).toFixed(6)}</div>
+<div>外尔:C_αβγδ=R_αβγδ-复杂项</div>
+<div>杨-米尔斯:D_μF^μν=J^ν</div>
+<div>狄拉克:(iγ^μ∂_μ-m)ψ=0</div>
+<div>克莱因-戈登:(□+m²)φ=0</div>
+<div>路径积分:⟨x_f|e^(-iHt/ℏ)|x_i⟩=∫Dxe^(iS[x]/ℏ)</div>
+<div>费曼传播子:G(x,y)=⟨0|T{φ(x)φ(y)}|0⟩</div>
+<div>重整化群:μ∂g/∂μ=β(g)</div>
+<div>标准模型:ℒ_SM=ℒ_规范+ℒ_希格斯+ℒ_汤川</div>
+<div>超对称:δψ=εQ,δφ=ε̄ψ</div>
+<div>弦论:S=-1/(2πα')∫d²σ√(-h)h^αβ∂_αX^μ∂_βX_μ</div>
+<div>卡拉比-丘:6维紧致化</div>
+<div>全息:S≤A/(4l_P²)</div>
+<div>AdS/CFT:Z_引力[φ₀]=Z_场论[J=φ₀]</div>
+<div>纠缠熵:S=-Tr(ρ_Alnρ_A)=${(Math.abs(鼠标X+鼠标Y)*0.693).toFixed(6)}</div>
+<div>冯诺依曼:S(ρ)=-Tr(ρlogρ)</div>
+<div>保真度:F(ρ,σ)=${(Math.cos(鼠标X)*Math.cos(鼠标Y)).toFixed(6)}</div>
+<div>量子互信息:I(A:B)=S(A)+S(B)-S(AB)</div>
+<div>贝尔不等式:|E(a,b)-E(a,c)|+E(b,c)≤2</div>
+<div>CHSH:S≤2√2(量子)</div>
+<div>量子态层析:ρ=Σ_ip_i|ψ_i⟩⟨ψ_i|</div>
+<div>密度矩阵:ρ=|ψ⟩⟨ψ|</div>
+<div>布洛赫球:|ψ⟩=cos(θ/2)|0⟩+e^(iφ)sin(θ/2)|1⟩</div>
+<div>泡利矩阵:[σ_i,σ_j]=2iε_ijkσ_k</div>
+<div>海森堡:ΔxΔp≥ℏ/2=${(1.055e-34/2).toExponential(6)}</div>
+<div>时间-能量:ΔEΔt≥ℏ/2</div>
+<div>角动量:[L_i,L_j]=iℏε_ijkL_k</div>
+<div>升降:L_±=L_x±iL_y</div>
+<div>本征值:L²|l,m⟩=ℏ²l(l+1)|l,m⟩</div>
+<div>自旋:S²=ℏ²s(s+1)</div>
+<div>泡利不相容:费米子</div>
+<div>费米-狄拉克:f(E)=1/(e^((E-μ)/k_BT)+1)</div>
+<div>玻色-爱因斯坦:n(E)=1/(e^((E-μ)/k_BT)-1)</div>
+<div>普朗克:B(ν,T)=(2hν³/c²)/(e^(hν/k_BT)-1)</div>
+<div>斯特藩-玻尔兹曼:j=σT⁴</div>
+<div>维恩:λ_maxT=2.898×10⁻³m·K</div>
+<div>康普顿:λ_C=h/(mc)=${(2.426e-12).toExponential(6)}m</div>
+<div>德布罗意:λ=h/p=${(6.626e-34/Math.abs(鼠标X*1e-24+1e-24)).toExponential(6)}m</div>
+<div>精细结构分裂:ΔE=(α²mc²/2n³)</div>
+<div>兰姆位移:量子电动力学修正</div>
+<div>塞曼:ΔE=μ_BBm_j</div>
+<div>斯塔克:电场分裂</div>
+<div>拉比:Ω_R=${(Math.abs(鼠标X*1e15)).toExponential(4)}rad/s</div>
+<div>退相干:T₂=${(Math.abs(1/(鼠标X*鼠标X+0.01))*1e-6).toExponential(4)}s</div>
+<div>弛豫:T₁=${(Math.abs(1/(鼠标Y*鼠标Y+0.01))*1e-6).toExponential(4)}s</div>
+<div>量子门:F_gate=${(1-Math.abs(鼠标X*鼠标Y)*0.001).toFixed(6)}</div>
+<div>纠错阈值:p_th≈10⁻²</div>
+<div>逻辑比特:n=${Math.floor(Math.abs(鼠标X*100+鼠标Y*100))}</div>
+<div>物理比特:n=${Math.floor(Math.abs(鼠标X*1000+鼠标Y*1000))}</div>
+<div>量子体积:QV=2^${Math.floor(Math.log2(Math.abs(鼠标X*100+100)))}</div>
+<div>克利福德群:保持泡利群</div>
+<div>T门:相位π/4</div>
+<div>Toffoli:通用可逆</div>
+<div>Fredkin:受控交换</div>
+<div>量子傅里叶:QFT|j⟩=1/√NΣ_ke^(2πijk/N)|k⟩</div>
+<div>Shor:O((logN)³)</div>
+<div>Grover:O(√N)</div>
+<div>量子退火:绝热演化</div>
+<div>VQE:混合算法</div>
+<div>QAOA:参数化电路</div>
+<div>张量网络:MPS,PEPS,MERA</div>
+<div>纠缠重整化:多尺度</div>
+<div>拓扑序:长程纠缠</div>
+<div>任意子:θ=${(鼠标X*π).toFixed(6)}</div>
+<div>拓扑计算:编织操作</div>
+<div>Majorana:γ†=γ</div>
+<div>Chern数:C=${Math.floor(鼠标X*10)}</div>
+<div>贝里相位:γ=${(鼠标X*鼠标Y*π).toFixed(6)}</div>
+<div>绝热定理:缓慢演化</div>
+<div>Zeno效应:频繁测量</div>
+<div>反Zeno:加速衰变</div>
+<div>动力学解耦:脉冲序列</div>
+<div>自旋回波:π脉冲</div>
+<div>CPMG序列:Carr-Purcell</div>
+<div>魔角:θ_m=54.74°</div>
+<div>化学位移:δ=ppm</div>
+<div>J耦合:${(Math.abs(鼠标X*100)).toFixed(2)}Hz</div>
+<div>弛豫率:R₁=${(Math.abs(鼠标X*1000)).toFixed(2)}s⁻¹</div>
+<div>扩散:D=${(Math.abs(鼠标Y*1e-9)).toExponential(4)}m²/s</div>
+<div>流体力学半径:r_h=k_BT/(6πηD)</div>
+<div>斯托克斯-爱因斯坦关系</div>
+<div>布朗运动:⟨x²⟩=2Dt=${(Math.abs(鼠标X*鼠标Y*1e-12)).toExponential(4)}m²</div>
+<div>朗之万:m(dv/dt)=-γv+F(t)</div>
+<div>福克-普朗克:∂P/∂t=-∂(μP)/∂x+D∂²P/∂x²</div>
+<div>主方程:dP_n/dt=Σ_m(W_nmP_m-W_mnP_n)</div>
+<div>Kramers:k=ω_0/(2π)·e^(-ΔE/k_BT)</div>
+<div>Arrhenius:k=Ae^(-E_a/RT)</div>
+<div>过渡态:k=(k_BT/h)·e^(-ΔG‡/RT)</div>
+<div>Marcus:k_ET∝e^(-(λ+ΔG°)²/4λk_BT)</div>
+<div>Förster:k_FRET∝(R₀/r)⁶</div>
+<div>Dexter:k_Dexter∝e^(-2r/L)</div>
+<div>光合作用:Φ=${(0.95-Math.abs(鼠标X*0.1)).toFixed(4)}</div>
+<div>荧光:Φ_f=${(Math.abs(Math.cos(鼠标X))).toFixed(4)}</div>
+<div>寿命:τ=${(Math.abs(1/(鼠标X*鼠标X+1))*1e-9).toExponential(4)}s</div>
+<div>Stern-Volmer:I₀/I=1+K_SV[Q]</div>
+<div>淬灭:k_q=${(Math.abs(鼠标Y*1e10)).toExponential(4)}M⁻¹s⁻¹</div>
+<div>双光子:σ₂=${(Math.abs(鼠标X*1e-50)).toExponential(4)}cm⁴·s</div>
+<div>非线性折射:n₂=${(Math.abs(鼠标Y*1e-20)).toExponential(4)}m²/W</div>
+<div>克尔效应:Δn=n₂I</div>
+<div>自聚焦:P_cr=λ²/(2πn₀n₂)</div>
+<div>孤子:色散平衡</div>
+<div>超连续谱:宽带相干</div>
+<div>光学频率梳:f_n=f_CEO+n·f_rep</div>
+<div>载波包络:φ_CEO=${(鼠标X*τ).toFixed(6)}rad</div>
+<div>阿秒脉冲:τ=${(Math.abs(鼠标X*100)+100).toFixed(2)}as</div>
+<div>高次谐波:HHG</div>
+<div>隧穿电离:γ=${(Math.abs(鼠标Y)+0.5).toFixed(4)}</div>
+<div>强场近似:SFA</div>
+<div>三步模型:电离-加速-复合</div>
+<div>截止能量:E_cutoff=I_p+3.17U_p</div>
+<div>有质动力:U_p=${(Math.abs(鼠标X*鼠标Y*10)).toFixed(4)}eV</div>
+<div>电离势:I_p=${(13.6+Math.abs(鼠标X*10)).toFixed(4)}eV</div>
+<div>ADK速率:Ammosov-Delone-Krainov</div>
+<div>PPT理论:Perelomov-Popov-Terent'ev</div>
+<div>Coulomb修正:长程势</div>
+<div>量子轨道:半经典</div>
+<div>鞍点近似:复时间</div>
+<div>Stokes现象:渐近跳跃</div>
+<div>WKB:ψ∝e^(i/ℏ∫pdx)</div>
+<div>Bohr-Sommerfeld:∮pdq=2πℏ(n+α)</div>
+<div>Maslov指标:α=μ/2</div>
+<div>因果结构:光锥</div>
+<div>事件视界:r=r_s=${(Math.abs(鼠标X*鼠标Y*10)).toFixed(4)}</div>
+<div>Penrose图:共形紧化</div>
+<div>Kruskal-Szekeres:最大延拓</div>
+<div>白洞:时间反演</div>
+<div>虫洞:Einstein-Rosen桥</div>
+<div>时间机器:CTC</div>
+<div>Gödel宇宙:旋转解</div>
+<div>Kerr黑洞:a=J/M</div>
+<div>能层:负能量区</div>
+<div>Penrose过程:提取旋转能</div>
+<div>超辐射:放大散射</div>
+<div>准正规模:ω=ω_R+iω_I</div>
+<div>铃声:振荡频率</div>
+<div>引力波:h_+,h_×</div>
+<div>四极公式:dE/dt=(G/5c⁵)⟨d³Q_ij/dt³⟩²</div>
+<div>啁啾质量:ℳ=${(Math.abs(鼠标X*10+5)).toFixed(4)}M☉</div>
+<div>合并时间:τ=(5/256)(c⁵/G³)·(a⁴/m₁m₂(m₁+m₂))</div>
+<div>应变:h≈${(Math.abs(鼠标X*鼠标Y*1e-21)).toExponential(4)}</div>
+<div>灵敏度:√S_n(f)=${(Math.abs(鼠标Y*1e-23)).toExponential(4)}Hz^(-1/2)</div>
+<div>信噪比:ρ=${(Math.abs(鼠标X*100+10)).toFixed(2)}</div>
+<div>匹配滤波:最优提取</div>
+<div>参数估计:Fisher矩阵</div>
+<div>贝叶斯:P(θ|d)∝P(d|θ)P(θ)</div>
+<div>嵌套采样:证据计算</div>
+<div>MCMC:Markov链</div>
+<div>Metropolis-Hastings算法</div>
+<div>Hamiltonian Monte Carlo</div>
+<div>变分推断:KL散度</div>
+<div>EM算法:期望最大化</div>
+<div>PCA:主成分分析</div>
+<div>t-SNE:非线性降维</div>
+<div>UMAP:流形学习</div>
+<div>神经网络:f(x)=σ(Wx+b)</div>
+<div>反向传播:∂L/∂w=∂L/∂y·∂y/∂w</div>
+<div>梯度下降:w←w-η∇L</div>
+<div>Adam:自适应学习率</div>
+<div>批归一化:标准化激活</div>
+<div>Dropout:p=${(0.5-Math.abs(鼠标X*0.1)).toFixed(4)}</div>
+<div>残差:y=F(x)+x</div>
+<div>注意力:Attention(Q,K,V)=softmax(QK^T/√d_k)V</div>
+<div>Transformer:自注意力</div>
+<div>BERT:双向编码</div>
+<div>GPT:生成预训练</div>
+<div>扩散模型:逐步去噪</div>
+<div>得分匹配:∇_xlogp(x)</div>
+<div>Langevin动力学采样</div>
+<div>VAE:变分自编码</div>
+<div>GAN:生成对抗</div>
+<div>Wasserstein:最优传输</div>
+<div>流模型:可逆变换</div>
+<div>归一化流:det|∂f/∂x|</div>
+<div>能量模型:p(x)∝e^(-E(x))</div>
+<div>对比学习:InfoNCE</div>
+<div>自监督:预训练任务</div>
+<div>元学习:学会学习</div>
+<div>少样本:N-way K-shot</div>
+<div>迁移学习:预训练微调</div>
+<div>多任务:共享表示</div>
+<div>持续学习:避免遗忘</div>
+<div>联邦学习:分布式</div>
+<div>强化学习:Q(s,a)=r+γmaxQ(s',a')</div>
+<div>策略梯度:∇J(θ)=𝔼[∇logπ(a|s)Q(s,a)]</div>
+<div>Actor-Critic:策略+价值</div>
+<div>PPO:近端策略优化</div>
+<div>DDPG:深度确定性</div>
+<div>SAC:软Actor-Critic</div>
+<div>MPC:模型预测控制</div>
+<div>卡尔曼滤波:最优估计</div>
+<div>粒子滤波:序贯Monte Carlo</div>
+<div>动态规划:Bellman方程</div>
+<div>值迭代:V(s)←max_a[r+γV(s')]</div>
+<div>策略迭代:评估+改进</div>
+<div>LQR:线性二次调节</div>
+<div>Riccati:最优控制</div>
+<div>Pontryagin极大值原理</div>
+<div>变分法:δJ=0</div>
+<div>Euler-Lagrange:d/dt(∂L/∂q̇)=∂L/∂q</div>
+<div>Noether:对称性→守恒律</div>
+<div>正则变换:保持辛结构</div>
+<div>泊松括号:{f,g}=Σ(∂f/∂q_i·∂g/∂p_i-∂f/∂p_i·∂g/∂q_i)</div>
+<div>Liouville:dρ/dt={ρ,H}=0</div>
+<div>遍历假设:时间=系综</div>
+<div>KAM定理:准周期稳定</div>
+<div>混沌:λ=${(Math.abs(鼠标X*鼠标Y)).toFixed(4)}</div>
+<div>分形维数:D=${(2+Math.abs(鼠标X)).toFixed(4)}</div>
+<div>Hausdorff维数:盒计数</div>
+<div>奇异吸引子:Lorenz,Rössler</div>
+<div>分岔:倍周期,Hopf,鞍结</div>
+<div>Feigenbaum:δ=4.669...</div>
+<div>普适性:重整化群</div>
+<div>临界指数:ξ∝|T-T_c|^(-ν)</div>
+<div>标度律:幂律行为</div>
+<div>相变:一阶/二阶/连续</div>
+<div>Ising:H=-JΣs_is_j-hΣs_i</div>
+<div>平均场:m=tanh(βJzm+βh)</div>
+<div>临界温度:T_c=${(Math.abs(鼠标X*100+273)).toFixed(2)}K</div>
+<div>关联长度:ξ=${(Math.abs(1/(鼠标X*鼠标X+0.01))).toFixed(4)}</div>
+<div>序参量:⟨m⟩=${(Math.tanh(鼠标X)).toFixed(6)}</div>
+<div>对称性破缺:自发磁化</div>
+<div>Goldstone模:无质量激发</div>
+<div>Higgs机制:规范玻色子获质量</div>
+<div>电弱统一:SU(2)×U(1)</div>
+<div>大统一:SU(5),SO(10)</div>
+<div>超对称:费米子↔玻色子</div>
+<div>超引力:局域超对称</div>
+<div>M理论:11维统一</div>
+<div>D膜:p+1维延展</div>
+<div>T对偶:R↔α'/R</div>
+<div>S对偶:g_s↔1/g_s</div>
+<div>镜像对称:Calabi-Yau</div>
+<div>拓扑弦:A模型,B模型</div>
+<div>Gromov-Witten不变量</div>
+<div>Donaldson-Thomas不变量</div>
+<div>同调代数:Ext,Tor</div>
+<div>导出范畴:三角范畴</div>
+<div>层论:上同调</div>
+<div>谱序列:逐步逼近</div>
+<div>K理论:向量丛分类</div>
+<div>示性类:Chern,Stiefel-Whitney</div>
+<div>Atiyah-Singer指标定理</div>
+<div>椭圆算子:Dirac,∂̄</div>
+<div>模空间:几何参数化</div>
+<div>Teichmüller空间:复结构</div>
+<div>映射类群:同胚模同伦</div>
+<div>辫群:编织关系</div>
+<div>纽结不变量:Jones多项式</div>
+<div>量子群:q变形</div>
+<div>Hopf代数:余乘法</div>
+<div>表示论:不可约表示</div>
+<div>特征标:χ(g)=Trρ(g)</div>
+<div>Schur引理:不可约间态射</div>
+<div>Clebsch-Gordan系数</div>
+<div>Wigner-Eckart定理</div>
+<div>6j符号,9j符号</div>
+<div>Racah代数:角动量耦合</div>
+<div>Young图:对称群表示</div>
+<div>Littlewood-Richardson规则</div>
+<div>Kostka数:分拆组合</div>
+<div>Schur函数:对称多项式</div>
+<div>Macdonald多项式:q,t变形</div>
+<div>仿射Lie代数:循环扩张</div>
+<div>Kac-Moody代数:无限维</div>
+<div>Virasoro代数:共形对称</div>
+<div>中心荷:c=${(Math.abs(鼠标X*10)).toFixed(4)}</div>
+<div>共形维数:h=${(Math.abs(鼠标Y*2)).toFixed(4)}</div>
+<div>算子乘积展开:OPE</div>
+<div>Ward恒等式:对称性约束</div>
+<div>最小模型:c<1离散系列</div>
+<div>Verlinde公式:融合规则</div>
+<div>模不变性:τ→(aτ+b)/(cτ+d)</div>
+<div>配分函数:Z(τ)=Trq^(L_0-c/24)</div>
+<div>Dedekindη函数</div>
+<div>Jacobiθ函数</div>
+<div>Eisenstein级数</div>
+<div>模形式:权重k变换</div>
+<div>Ramanujanτ函数</div>
+<div>椭圆曲线:y²=x³+ax+b</div>
+<div>j不变量:j=1728g₂³/Δ</div>
+<div>Weierstrass℘函数</div>
+<div>Abel定理:积分可加性</div>
+<div>Riemann-Roch定理</div>
+<div>亏格:g=${Math.floor(Math.abs(鼠标X*5))}</div>
+<div>Jacobi簇:紧复环面</div>
+<div>θ除子:特殊除子</div>
+<div>Torelli定理:周期映射</div>
+<div>Hodge理论:调和形式</div>
+<div>Kähler流形:复辛结构</div>
+<div>Calabi猜想:Yau证明</div>
+<div>Ricci平坦度规</div>
+<div>SYZ猜想:镜像对称几何</div>
+<div>Strominger-Yau-Zaslow纤维化</div>
+<div>大复结构极限</div>
+<div>Gepner点:共形场论点</div>
+<div>Landau-Ginzburg模型</div>
+<div>超势:W(Φ)</div>
+<div>临界点:∂W/∂Φ_i=0</div>
+<div>Morse理论:临界点拓扑</div>
+<div>Floer同调:无穷维Morse</div>
+<div>辛几何:ω闭非退化</div>
+<div>Hamiltonian流:X_H=ω^(-1)(dH)</div>
+<div>矩映射:μ:M→𝔤*</div>
+<div>辛约化:M//G</div>
+<div>Marsden-Weinstein商</div>
+<div>Duistermaat-Heckman定理</div>
+<div>局部化公式:积分→求和</div>
+<div>等变上同调:H_G*(M)</div>
+<div>Kirwan映射</div>
+<div>GIT商:几何不变量理论</div>
+<div>稳定性条件:Mumford</div>
+<div>Hilbert方案:子概形模空间</div>
+<div>Quot概形:商层模空间</div>
+<div>Bridgeland稳定性</div>
+<div>导出等价:D^b(X)≅D^b(Y)</div>
+<div>Fourier-Mukai变换</div>
+<div>核对象:𝒫∈D^b(X×Y)</div>
+<div>自同构群:Aut(D^b(X))</div>
+<div>球面对象:Ext^i(E,E)=ℂ[i]</div>
+<div>半正交分解:⟨𝒜₁,...,𝒜_n⟩</div>
+<div>例外集合:生成元</div>
+<div>倾斜对象:生成器</div>
+<div>t结构:心</div>
+<div>稳定性条件空间:Stab(𝒟)</div>
+<div>墙穿越:稳定性变化</div>
+<div>Donaldson-Thomas不变量计数</div>
+<div>Pandharipande-Thomas不变量</div>
+<div>Gopakumar-Vafa不变量</div>
+<div>BPS态:短超多重态</div>
+<div>中心荷公式:Z(γ)∈ℂ</div>
+<div>光线:argZ(γ)=常数</div>
+<div>跃迁:光线穿越</div>
+<div>Kontsevich-Soibelman墙穿越公式</div>
+<div>量子环面代数</div>
+<div>簇代数:Fomin-Zelevinsky</div>
+<div>簇变换:突变</div>
+<div>Laurent现象</div>
+<div>正性猜想:系数>0</div>
+<div>有限型分类:Dynkin图</div>
+<div>仿射型:扩展Dynkin</div>
+<div>无限型:野性表示</div>
+<div>箭图:顶点+箭头</div>
+<div>路代数:基础代数</div>
+<div>关系:理想I</div>
+<div>表示:模M</div>
+<div>维数向量:dimM=(d₁,...,d_n)</div>
+<div>Euler形式:⟨α,β⟩</div>
+<div>根系统:Φ⊂𝔥*</div>
+<div>Weyl群:W=⟨s_α⟩</div>
+<div>Cartan矩阵:A_ij</div>
+<div>Dynkin图:节点+边</div>
+<div>单根:Π={α₁,...,α_n}</div>
+<div>正根:Φ⁺</div>
+<div>最高根:θ</div>
+<div>Coxeter数:h</div>
+<div>对偶Coxeter数:h^∨</div>
+<div>Killing形式:κ(x,y)=Tr(adxady)</div>
+<div>Casimir算子:C=ΣT^aT_a</div>
+<div>二次Casimir本征值:C₂(R)</div>
+<div>Dynkin指标:T(R)</div>
+<div>反常系数:A(R)</div>
+<div>β函数:β(g)=-b₀g³+...</div>
+<div>渐近自由:b₀>0</div>
+<div>红外固定点:β(g*)=0</div>
+<div>共形窗口:N_f范围</div>
+<div>Banks-Zaks固定点</div>
+<div>Seiberg对偶:强弱耦合</div>
+<div>'tHooft反常匹配</div>
+<div>超对称指标:Tr(-1)^Fe^(-βH)</div>
+<div>Witten指标:Tr(-1)^F</div>
+<div>椭圆亏格:超对称分拆函数</div>
+<div>局域化:路径积分→有限维</div>
+<div>Nekrasov分拆函数</div>
+<div>ε变形:Ω背景</div>
+<div>AGT对应:4d规范↔2dCFT</div>
+<div>Alday-Gaiotto-Tachikawa</div>
+<div>Liouville理论:中心荷c>25</div>
+<div>Toda理论:W代数</div>
+<div>仿射Toda:可积系统</div>
+<div>Yangian:量子群</div>
+<div>R矩阵:杨-Baxter方程</div>
+<div>Betheansatz:精确解</div>
+<div>传递矩阵:对易族</div>
+<div>守恒荷:无穷多</div>
+<div>散射矩阵:因子化</div>
+<div>CDD因子:束缚态极点</div>
+<div>热力学Betheansatz:TBA</div>
+<div>Y系统:函数方程</div>
+<div>T系统:T函数</div>
+<div>Q系统:BaxterQ算子</div>
+<div>Hirota方程:双线性</div>
+<div>τ函数:KP/KdV层次</div>
+<div>SatoGrassmannian</div>
+<div>无限维Plücker关系</div>
+<div>顶点算子:场代数</div>
+<div>Fock空间:玻色/费米</div>
+<div>正规序::AB:</div>
+<div>Wick定理:收缩</div>
+<div>费曼图:微扰展开</div>
+<div>圈积分:发散正规化</div>
+<div>维数正规化:d=4-2ε</div>
+<div>最小减除:MS̄方案</div>
+<div>重整化尺度:μ</div>
+<div>跑动耦合:α(μ)</div>
+<div>DGLAP方程:部分子演化</div>
+<div>Altarelli-Parisi分裂函数</div>
+<div>BFKL方程:小x物理</div>
+<div>Regge理论:高能散射</div>
+<div>Pomeron:真空量子数交换</div>
+<div>色玻璃凝聚:CGC</div>
+<div>饱和:Qs²=${(Math.abs(鼠标X*鼠标Y*100)).toFixed(2)}GeV²</div>
+<div>BK方程:Balitsky-Kovchegov</div>
+<div>JIMWLK方程:重整化群</div>
+<div>Wilson线:规范联络</div>
+<div>Polyakov环:有限温度序参量</div>
+<div>禁闭-退禁闭相变</div>
+<div>夸克-胶子等离子体:QGP</div>
+<div>手征对称性恢复</div>
+<div>QCD相图:T-μ平面</div>
+<div>临界点:一阶线终点</div>
+<div>重离子碰撞:小爆炸</div>
+<div>流体力学:相对论Navier-Stokes</div>
+<div>剪切粘度:η/s≈1/(4π)</div>
+<div>KSS界:全息下界</div>
+<div>椭圆流:v₂=${(Math.abs(Math.sin(鼠标X*2))*0.2).toFixed(4)}</div>
+<div>喷注淬火:能量损失</div>
+<div>重味:魅夸克,底夸克</div>
+<div>夸克偶素:J/ψ,Υ</div>
+<div>屏蔽:Debye质量</div>
+<div>解离温度:T_d</div>
+<div>再结合:统计强子化</div>
+<div>热场论:虚时形式</div>
+<div>Matsubara频率:ω_n=2πnT</div>
+<div>实时形式:Schwinger-Keldysh</div>
+<div>Kubo公式:线性响应</div>
+<div>涨落-耗散定理</div>
+<div>时刻:${Date.now()}</div>
+<div>螺旋之舞:φ^${Math.floor(Math.abs(鼠标X*10+鼠标Y*10))}=${Math.pow(φ,Math.abs(鼠标X*10+鼠标Y*10)).toFixed(6)}</div>
+</div>
+`;
+  覆盖层元素.innerHTML=方程HTML;
+};
 
-  // bind buffers & attributes
-  gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);
-  gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,sizeBuf);
-  gl.enableVertexAttribArray(aSize); gl.vertexAttribPointer(aSize,1,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,colBuf);
-  gl.enableVertexAttribArray(aCol); gl.vertexAttribPointer(aCol,3,gl.FLOAT,false,0,0);
+const 动画循环=()=>{
+  requestAnimationFrame(动画循环);
+  
+  目标X+=(鼠标X-目标X)*0.05;
+  目标Y+=(鼠标Y-目标Y)*0.05;
+  
+  螺旋组.rotation.x=目标Y*0.5;
+  螺旋组.rotation.y+=0.003+目标X*0.015;
+  螺旋组.rotation.z=Math.sin(Date.now()*0.0001)*0.15;
+  
+  相机.position.x=Math.sin(Date.now()*0.0003)*80;
+  相机.position.y=Math.cos(Date.now()*0.0002)*50;
+  相机.lookAt(场景.position);
+  
+  螺旋组.children.forEach((子对象,索引)=>{
+    if(子对象.type==='Mesh'&&子对象.geometry.type==='SphereGeometry'){
+      子对象.rotation.x+=0.015;
+      子对象.rotation.y+=0.025;
+      const 时间=Date.now()*0.001;
+      子对象.position.y+=Math.sin(时间+索引)*0.08;
+      子对象.scale.setScalar(1+Math.sin(时间*2+索引)*0.15);
+    }
+  });
+  
+  更新方程显示();
+  渲染器.render(场景,相机);
+};
 
-  gl.drawArrays(gl.POINTS,0,N);
-
-  requestAnimationFrame(render);
-}
-updateEq(0,0);
-requestAnimationFrame(render);
+window.addEventListener('load',()=>{
+  console.log("[v0] 页面加载完成");
+  if(typeof THREE!=='undefined'){
+    console.log("[v0] Three.js已加载");
+    初始化();
+  }else{
+    console.error("[v0] Three.js加载失败");
+    document.body.innerHTML='<div style="color:#f00;padding:20px;font-family:monospace">错误:Three.js库加载失败</div>';
+  }
+});
 </script>
 </body>
 </html>
-```
