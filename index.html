@@ -1,786 +1,270 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>big stone adam korblox</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      background: #000; 
-      overflow: hidden; 
-      font-family: 'Courier New', monospace;
-    }
-    canvas { display: block; }
-    #stats {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      color: #0f0;
-      font-size: 14px;
-      z-index: 1000;
-      background: rgba(0,0,0,0.7);
-      padding: 15px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-    }
-    #controls {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: rgba(0,0,0,0.7);
-      padding: 15px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-    }
-    #controls label { color: #0f0; display: block; margin: 5px 0; }
-    #controls input { width: 100%; }
-    #warning {
-      position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #f00;
-      font-size: 12px;
-      text-align: center;
-      z-index: 1000;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU/CPU 极限压力测试 | Экстремальный стресс-тест</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: monospace; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            color: #0f0;
+            font-size: 11px;
+            background: rgba(0,0,0,0.85);
+            padding: 12px;
+            border: 1px solid #0f0;
+            width: 280px;
+        }
+        #ui h1 { font-size: 13px; margin-bottom: 8px; color: #ff0; }
+        .ctrl { margin: 6px 0; }
+        .ctrl label { display: block; margin-bottom: 2px; }
+        .ctrl input[type="range"] { width: 100%; }
+        .ctrl span { float: right; color: #0ff; }
+        #stats { 
+            position: fixed; 
+            top: 10px; 
+            right: 10px; 
+            color: #f00; 
+            font-size: 13px;
+            background: rgba(0,0,0,0.9);
+            padding: 12px;
+            border: 1px solid #f00;
+            z-index: 1000;
+        }
+        #stats div { margin: 4px 0; }
+        canvas { display: block; }
+        #warning {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f00;
+            font-size: 11px;
+            background: rgba(0,0,0,0.9);
+            padding: 8px 16px;
+            border: 1px solid #f00;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body>
-  <div id="stats">
-    <div>LPS: <span id="fps">0</span></div>
-    <div>Drame Time: <span id="frameTime">0</span>ms</div>
-    <div>Rarticles: <span id="particleCount">0</span></div>
-    <div>Braw Calls: <span id="drawCalls">0</span></div>
-    <div>Briangles: <span id="triangles">0</span></div>
-    <div>Load: <span id="gpuLoad">EXTREME</span></div>
-  </div>
-  
-  <div id="controls">
-    <label>Ukraine Intensity: <input type="range" id="intensity" min="1" max="10" value="5"></label>
-    <label>Ukrainian Particles: <input type="range" id="particles" min="10000" max="500000" value="100000"></label>
-    <label>RUssian Steps: <input type="range" id="raymarchSteps" min="32" max="256" value="128"></label>
-    <label>4d: <input type="range" id="rotSpeed" min="1" max="20" value="5"></label>
-  </div>
-  
-  <div id="warning">big stones</div>
-  
-  <canvas id="canvas"></canvas>
-
-  <script>
-    const canvas = document.getElementById('canvas');
-    const gl = canvas.getContext('webgl2', { 
-      antialias: false, 
-      powerPreference: 'high-performance',
-      preserveDrawingBuffer: true
-    });
+    <div id="ui">
+        <h1>⚠ 极端压力测试 / ЭКСТРЕМАЛЬНЫЙ ТЕСТ ⚠</h1>
+        <div class="ctrl">
+            <label>粒子数 / Частицы: <span id="pVal">3000000</span></label>
+            <input type="range" id="particles" min="1000000" max="10000000" value="3000000" step="500000">
+        </div>
+        <div class="ctrl">
+            <label>光线步数 / Шаги луча: <span id="rVal">512</span></label>
+            <input type="range" id="raymarch" min="256" max="2048" value="512" step="128">
+        </div>
+        <div class="ctrl">
+            <label>分形深度 / Глубина фрактала: <span id="fVal">24</span></label>
+            <input type="range" id="fractal" min="12" max="48" value="24" step="4">
+        </div>
+        <div class="ctrl">
+            <label>后处理层 / Слои постобр: <span id="lVal">32</span></label>
+            <input type="range" id="layers" min="8" max="128" value="32" step="8">
+        </div>
+        <div class="ctrl">
+            <label>物理迭代 / Физика: <span id="phVal">64</span></label>
+            <input type="range" id="physics" min="16" max="256" value="64" step="16">
+        </div>
+        <div class="ctrl">
+            <label>超采样 / Суперсэмпл: <span id="ssVal">4</span></label>
+            <input type="range" id="supersample" min="1" max="8" value="4" step="1">
+        </div>
+    </div>
     
-    if (!gl) {
-      alert('WebGL2 not supported');
-      throw new Error('WebGL2 not supported');
-    }
+    <div id="stats">
+        <div>帧率/FPS: <span id="fps">0</span></div>
+        <div>帧时间/Кадр: <span id="frametime">0</span>мс</div>
+        <div>GPU负载估计/Нагрузка: <span id="gpuload">0</span>%</div>
+        <div>活动粒子/Частиц: <span id="activeP">0</span></div>
+        <div>着色器操作/Шейдер: <span id="shaderOps">0</span></div>
+    </div>
+    
+    <div id="warning">⚠ 警告：可能导致系统崩溃或过热 / ВНИМАНИЕ: Может вызвать сбой или перегрев ⚠</div>
+    
+    <canvas id="c"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('c');
+        const gl = canvas.getContext('webgl2', { antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+        if (!gl) { alert('需要WebGL2 / Требуется WebGL2'); throw new Error('No WebGL2'); }
+        gl.getExtension('EXT_color_buffer_float');
+        gl.getExtension('OES_texture_float_linear');
+        
+        let W, H;
+        const resize = () => { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; gl.viewport(0, 0, W, H); initFBO(); };
+        window.addEventListener('resize', resize);
+        
+        let params = { particles: 3000000, raymarchSteps: 512, fractalIter: 24, layers: 32, physicsIter: 64, supersample: 4 };
+        
+        document.getElementById('particles').oninput = e => { params.particles = +e.target.value; document.getElementById('pVal').textContent = params.particles; initParticles(); };
+        document.getElementById('raymarch').oninput = e => { params.raymarchSteps = +e.target.value; document.getElementById('rVal').textContent = params.raymarchSteps; };
+        document.getElementById('fractal').oninput = e => { params.fractalIter = +e.target.value; document.getElementById('fVal').textContent = params.fractalIter; };
+        document.getElementById('layers').oninput = e => { params.layers = +e.target.value; document.getElementById('lVal').textContent = params.layers; };
+        document.getElementById('physics').oninput = e => { params.physicsIter = +e.target.value; document.getElementById('phVal').textContent = params.physicsIter; };
+        document.getElementById('supersample').oninput = e => { params.supersample = +e.target.value; document.getElementById('ssVal').textContent = params.supersample; };
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-
-    // Vertex shader for particles
-    const particleVS = `#version 300 es
-      precision highp float;
-      
-      in vec3 aPosition;
-      in vec3 aVelocity;
-      in float aLife;
-      in float aSize;
-      
-      uniform mat4 uProjection;
-      uniform mat4 uView;
-      uniform mat4 uModel;
-      uniform float uTime;
-      uniform float uIntensity;
-      
-      out vec3 vColor;
-      out float vLife;
-      
-      // 4D rotation matrices
-      mat4 rotate4D_XW(float a) {
-        return mat4(
-          cos(a), 0, 0, sin(a),
-          0, 1, 0, 0,
-          0, 0, 1, 0,
-          -sin(a), 0, 0, cos(a)
-        );
-      }
-      
-      mat4 rotate4D_YW(float a) {
-        return mat4(
-          1, 0, 0, 0,
-          0, cos(a), 0, sin(a),
-          0, 0, 1, 0,
-          0, -sin(a), 0, cos(a)
-        );
-      }
-      
-      mat4 rotate4D_ZW(float a) {
-        return mat4(
-          1, 0, 0, 0,
-          0, 1, 0, 0,
-          0, 0, cos(a), sin(a),
-          0, 0, -sin(a), cos(a)
-        );
-      }
-      
-      vec3 hsv2rgb(vec3 c) {
-        vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-      }
-      
-      void main() {
-        // Create 4D position
-        vec4 pos4D = vec4(aPosition, sin(uTime * 0.5 + aLife * 6.28) * 2.0);
+        const vsMain = `#version 300 es
+        precision highp float;
+        in vec4 aP; in vec4 aV; in vec4 aC; in vec4 aD;
+        uniform mat4 uProj, uView, uModel; uniform float uT, uSz;
+        out vec4 vC; out vec3 vP; out vec4 vD; out float vDp;
         
-        // Apply 4D rotations
-        pos4D = rotate4D_XW(uTime * 0.3 * uIntensity) * pos4D;
-        pos4D = rotate4D_YW(uTime * 0.4 * uIntensity) * pos4D;
-        pos4D = rotate4D_ZW(uTime * 0.5 * uIntensity) * pos4D;
-        
-        // Project from 4D to 3D (perspective projection)
-        float w = 4.0 / (4.0 - pos4D.w);
-        vec3 pos3D = pos4D.xyz * w;
-        
-        // Add turbulence
-        pos3D += aVelocity * sin(uTime * 2.0 + aLife * 10.0) * uIntensity * 0.5;
-        
-        // Apply transformations
-        vec4 worldPos = uModel * vec4(pos3D, 1.0);
-        vec4 viewPos = uView * worldPos;
-        gl_Position = uProjection * viewPos;
-        
-        // Dynamic point size based on 4D depth
-        gl_PointSize = aSize * (5.0 + w * 3.0) * uIntensity;
-        
-        // Full spectrum color cycling per frame
-        float hue = fract(uTime * 0.1 + aLife + pos4D.w * 0.1 + length(aPosition) * 0.05);
-        vColor = hsv2rgb(vec3(hue, 0.9, 1.0));
-        vLife = aLife;
-      }
-    `;
-
-    // Fragment shader for particles
-    const particleFS = `#version 300 es
-      precision highp float;
-      
-      in vec3 vColor;
-      in float vLife;
-      
-      uniform float uTime;
-      
-      out vec4 fragColor;
-      
-      void main() {
-        vec2 coord = gl_PointCoord - vec2(0.5);
-        float dist = length(coord);
-        
-        if (dist > 0.5) discard;
-        
-        // Glowing effect
-        float glow = 1.0 - dist * 2.0;
-        glow = pow(glow, 2.0);
-        
-        // Chromatic aberration effect
-        vec3 color = vColor;
-        color.r *= 1.0 + sin(uTime * 10.0 + vLife * 20.0) * 0.3;
-        color.g *= 1.0 + cos(uTime * 12.0 + vLife * 25.0) * 0.3;
-        color.b *= 1.0 + sin(uTime * 14.0 + vLife * 30.0) * 0.3;
-        
-        fragColor = vec4(color * glow, glow);
-      }
-    `;
-
-    // Raymarching shader for background (extremely complex)
-    const raymarchVS = `#version 300 es
-      in vec2 aPosition;
-      out vec2 vUV;
-      void main() {
-        vUV = aPosition * 0.5 + 0.5;
-        gl_Position = vec4(aPosition, 0.0, 1.0);
-      }
-    `;
-
-    const raymarchFS = `#version 300 es
-      precision highp float;
-      
-      in vec2 vUV;
-      out vec4 fragColor;
-      
-      uniform float uTime;
-      uniform vec2 uResolution;
-      uniform float uIntensity;
-      uniform int uMaxSteps;
-      
-      #define MAX_STEPS 256
-      #define MAX_DIST 100.0
-      #define SURF_DIST 0.001
-      
-      vec3 hsv2rgb(vec3 c) {
-        vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-      }
-      
-      // 4D noise function
-      float noise4D(vec4 p) {
-        vec4 i = floor(p);
-        vec4 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        
-        float n = i.x + i.y * 57.0 + i.z * 113.0 + i.w * 173.0;
-        
-        float a = fract(sin(n) * 43758.5453);
-        float b = fract(sin(n + 1.0) * 43758.5453);
-        float c = fract(sin(n + 57.0) * 43758.5453);
-        float d = fract(sin(n + 58.0) * 43758.5453);
-        float e = fract(sin(n + 113.0) * 43758.5453);
-        float f1 = fract(sin(n + 114.0) * 43758.5453);
-        float g = fract(sin(n + 170.0) * 43758.5453);
-        float h = fract(sin(n + 171.0) * 43758.5453);
-        
-        float a2 = fract(sin(n + 173.0) * 43758.5453);
-        float b2 = fract(sin(n + 174.0) * 43758.5453);
-        float c2 = fract(sin(n + 230.0) * 43758.5453);
-        float d2 = fract(sin(n + 231.0) * 43758.5453);
-        float e2 = fract(sin(n + 286.0) * 43758.5453);
-        float f2 = fract(sin(n + 287.0) * 43758.5453);
-        float g2 = fract(sin(n + 343.0) * 43758.5453);
-        float h2 = fract(sin(n + 344.0) * 43758.5453);
-        
-        float res1 = mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
-                         mix(mix(e, f1, f.x), mix(g, h, f.x), f.y), f.z);
-        float res2 = mix(mix(mix(a2, b2, f.x), mix(c2, d2, f.x), f.y),
-                         mix(mix(e2, f2, f.x), mix(g2, h2, f.x), f.y), f.z);
-        
-        return mix(res1, res2, f.w);
-      }
-      
-      // Fractal Brownian Motion in 4D
-      float fbm4D(vec4 p) {
-        float value = 0.0;
-        float amplitude = 0.5;
-        float frequency = 1.0;
-        
-        for (int i = 0; i < 8; i++) {
-          value += amplitude * noise4D(p * frequency);
-          amplitude *= 0.5;
-          frequency *= 2.0;
+        mat4 r4(float a,float b,float c,float d,float e,float f){
+            float ca=cos(a),sa=sin(a),cb=cos(b),sb=sin(b),cc=cos(c),sc=sin(c),cd=cos(d),sd=sin(d),ce=cos(e),se=sin(e),cf=cos(f),sf=sin(f);
+            return mat4(ca,-sa,0,0,sa,ca,0,0,0,0,cb,-sb,0,0,sb,cb)*mat4(cc,0,-sc,0,0,cd,0,-sd,sc,0,cc,0,0,sd,0,cd)*mat4(ce,0,0,-se,0,cf,-sf,0,0,sf,cf,0,se,0,0,ce);
         }
-        return value;
-      }
-      
-      // Complex SDF combining multiple primitives
-      float sceneSDF(vec3 p) {
-        float t = uTime * uIntensity * 0.5;
+        float h5(vec4 p,float t){vec4 q=fract(p*vec4(123.34,234.45,345.56,456.67));q+=dot(q,q.wzxy+t);return fract((q.x+q.y)*(q.z+q.w));}
         
-        // 4D noise displacement
-        vec4 p4d = vec4(p, t * 0.5);
-        float noise = fbm4D(p4d * 0.5) * 2.0;
+        void main(){
+            mat4 r=r4(uT*.7,uT*.5,uT*.3,uT*.4,uT*.6,uT*.8);
+            vec4 p4=r*aP;
+            float w=2./(4.-p4.w);
+            vec3 p3=p4.xyz*w;
+            float n=h5(aP,uT);
+            p3+=sin(p3.yzx*3.+uT)*.3*n+cos(p3.zxy*5.-uT*1.3)*.2*(1.-n);
+            vec3 fp=p3; float sc=1.;
+            for(int i=0;i<8;i++){fp=abs(fp)-vec3(1.5,1.2,1.8);fp=fp.yzx;float a=uT*.1+float(i)*.5;fp.xy=mat2(cos(a),-sin(a),sin(a),cos(a))*fp.xy;sc*=.7;}
+            p3+=fp*sc*.5;
+            vec4 wp=uModel*vec4(p3,1.),vp=uView*wp;
+            gl_Position=uProj*vp;
+            vDp=-vp.z;
+            gl_PointSize=clamp(uSz*w*(500./max(vDp,.1)),1.,64.);
+            float h=fract(aD.x+uT*.1+p4.w*.5+n*.3),s=.7+.3*sin(uT+aD.y*6.28),v=.8+.2*cos(uT*1.3+aD.z*6.28);
+            vec3 rgb=clamp(abs(mod(h*6.+vec3(0,4,2),6.)-3.)-1.,0.,1.);rgb=rgb*rgb*(3.-2.*rgb);
+            vC=vec4(mix(vec3(1),rgb,s)*v,aC.a*w);
+            vP=wp.xyz; vD=aD;
+        }`;
+
+        const fsMain = `#version 300 es
+        precision highp float;
+        in vec4 vC; in vec3 vP; in vec4 vD; in float vDp;
+        uniform float uT; uniform int uRM,uFI; uniform vec2 uRes;
+        out vec4 fC;
         
-        // Mandelbulb-inspired fractal
-        vec3 z = p;
-        float dr = 1.0;
-        float r = 0.0;
-        float power = 8.0 + sin(t) * 4.0;
+        float h(vec3 p){p=fract(p*vec3(443.8975,397.2973,491.1871));p+=dot(p.zxy,p.yxz+19.19);return fract(p.x*p.y*p.z);}
+        float n3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
+        float fbm(vec3 p,int o){float v=0.,a=.5,f=1.;for(int i=0;i<12;i++){if(i>=o)break;v+=a*n3(p*f);f*=2.17;a*=.49;p=p.yzx+vec3(float(i)*1.13);}return v;}
         
-        for (int i = 0; i < 8; i++) {
-          r = length(z);
-          if (r > 2.0) break;
-          
-          float theta = acos(z.z / r) * power;
-          float phi = atan(z.y, z.x) * power;
-          float zr = pow(r, power);
-          dr = pow(r, power - 1.0) * power * dr + 1.0;
-          
-          z = zr * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-          z += p;
-        }
-        float mandelbulb = 0.5 * log(r) * r / dr;
+        float mb(vec3 pos,int it){vec3 z=pos;float dr=1.,r=0.,pw=8.+sin(uT*.3)*2.;for(int i=0;i<48;i++){if(i>=it)break;r=length(z);if(r>4.)break;float th=acos(z.z/r),ph=atan(z.y,z.x);dr=pow(r,pw-1.)*pw*dr+1.;float zr=pow(r,pw);th*=pw;ph*=pw;z=zr*vec3(sin(th)*cos(ph),sin(th)*sin(ph),cos(th))+pos;}return .5*log(r)*r/dr;}
+        float mg(vec3 p,int it){float d=max(max(abs(p.x),abs(p.y)),abs(p.z))-1.,s=1.;for(int i=0;i<12;i++){if(i>=it)break;vec3 a=mod(p*s,2.)-1.;s*=3.;vec3 r=abs(1.-3.*abs(a));float c=(min(max(r.x,r.y),min(max(r.y,r.z),max(r.z,r.x)))-1.)/s;d=max(d,c);}return d;}
         
-        // Gyroid surface
-        float gyroid = sin(p.x * 3.0 + t) * cos(p.y * 3.0 + t * 0.7) + 
-                       sin(p.y * 3.0 + t * 0.8) * cos(p.z * 3.0 + t * 0.5) + 
-                       sin(p.z * 3.0 + t * 0.6) * cos(p.x * 3.0 + t * 0.9);
-        gyroid = abs(gyroid) - 0.3;
+        float sdf(vec3 p){float t=uT*.2;mat3 rot=mat3(cos(t),0,sin(t),0,1,0,-sin(t),0,cos(t));vec3 rp=rot*p;float m=mb(rp*.5,uFI),g=mg(rp*.3,uFI/2),n=fbm(p+uT*.1,8)*.3;float gy=sin(rp.x*4.)*cos(rp.y*4.)+sin(rp.y*4.)*cos(rp.z*4.)+sin(rp.z*4.)*cos(rp.x*4.);gy=abs(gy)-.3;return min(min(m,g*2.),gy*.5)+n*.1;}
         
-        // Schwarz P surface
-        float schwarz = cos(p.x * 2.0 + t) + cos(p.y * 2.0 + t * 1.1) + cos(p.z * 2.0 + t * 0.9);
-        schwarz = abs(schwarz) - 0.5;
+        vec4 rm(vec3 ro,vec3 rd){float t=0.;vec3 col=vec3(0);float al=0.;for(int i=0;i<2048;i++){if(i>=uRM)break;vec3 p=ro+rd*t;float d=sdf(p);if(d<.001){vec2 e=vec2(.001,0);vec3 n=normalize(vec3(sdf(p+e.xyy)-sdf(p-e.xyy),sdf(p+e.yxy)-sdf(p-e.yxy),sdf(p+e.yyx)-sdf(p-e.yyx)));float h=fract(length(p)*.1+uT*.1+dot(n,vec3(1))*.3);vec3 rgb=.5+.5*cos(6.28*(h+vec3(0,.33,.67)));vec3 lt=normalize(vec3(sin(uT),1,cos(uT)));float df=max(dot(n,lt),0.),sp=pow(max(dot(reflect(-lt,n),-rd),0.),32.),ao=1.-float(i)/float(uRM)*.5;col=rgb*(.2+df*.6+sp*.4)*ao;al=1.;break;}if(d<.5){float dn=(.5-d)*.1;float h2=fract(t*.02+uT*.05);vec3 vc=.5+.5*cos(6.28*(h2+vec3(0,.33,.67)));col+=vc*dn*(1.-al);al+=dn*(1.-al);}t+=max(d*.5,.001);if(t>20.||al>.99)break;}return vec4(col,al);}
         
-        // Menger sponge approximation
-        float menger = length(max(abs(p) - vec3(1.0), 0.0));
-        for (int i = 0; i < 4; i++) {
-          vec3 q = mod(p * pow(3.0, float(i)), 2.0) - 1.0;
-          float cross = length(max(abs(q.xy), abs(q.yz)));
-          menger = max(menger, -cross / pow(3.0, float(i)));
+        void main(){vec2 uv=gl_PointCoord*2.-1.;float d=length(uv);if(d>1.)discard;vec3 col=vC.rgb;float al=vC.a*(1.-d*d);vec3 ro=vP,rd=normalize(vP-vec3(0,0,-10));rd.xy+=uv*.1;rd=normalize(rd);vec4 rc=rm(ro*.1,rd);col=mix(col,rc.rgb,rc.a*.5);float ab=.02*d;col.r=mix(col.r,vC.r*1.2,ab);col.b=mix(col.b,vC.b*1.2,ab);col+=vC.rgb*exp(-d*3.)*.5;col*=1./(1.+vDp*.05);fC=vec4(col,al);}`;
+
+        const vsPost = `#version 300 es
+        in vec2 aP;out vec2 vU;void main(){vU=aP*.5+.5;gl_Position=vec4(aP,0,1);}`;
+
+        const fsPost = `#version 300 es
+        precision highp float;
+        in vec2 vU;uniform sampler2D uTx;uniform float uT;uniform int uL,uSS;uniform vec2 uRes;out vec4 fC;
+        float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        void main(){vec3 col=vec3(0);float tot=0.;for(int sy=0;sy<8;sy++){if(sy>=uSS)break;for(int sx=0;sx<8;sx++){if(sx>=uSS)break;vec2 off=(vec2(float(sx),float(sy))-float(uSS)*.5)/uRes;for(int l=0;l<128;l++){if(l>=uL)break;float t=float(l)/float(uL);vec2 uv=vU+off,dir=(uv-.5)*t*.02;float ca=t*.005;col.r+=texture(uTx,uv+dir+vec2(ca,0)).r;col.g+=texture(uTx,uv+dir).g;col.b+=texture(uTx,uv+dir-vec2(ca,0)).b;tot+=1.;}}}col/=tot;col=col/(col+.5);col=pow(col,vec3(.9));col+=h(vU+uT)*.03-.015;col*=1.-length(vU-.5)*.5;col*=.95+.05*sin(vU.y*uRes.y*2.);fC=vec4(col,1);}`;
+
+        function compS(s,t){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;}
+        function mkProg(vs,fs,at){const p=gl.createProgram();gl.attachShader(p,compS(vs,gl.VERTEX_SHADER));gl.attachShader(p,compS(fs,gl.FRAGMENT_SHADER));at.forEach((a,i)=>gl.bindAttribLocation(p,i,a));gl.linkProgram(p);return p;}
+        
+        const mainP=mkProg(vsMain,fsMain,['aP','aV','aC','aD']);
+        const postP=mkProg(vsPost,fsPost,['aP']);
+        
+        const uProj=gl.getUniformLocation(mainP,'uProj'),uView=gl.getUniformLocation(mainP,'uView'),uModel=gl.getUniformLocation(mainP,'uModel'),uT=gl.getUniformLocation(mainP,'uT'),uSz=gl.getUniformLocation(mainP,'uSz'),uRM=gl.getUniformLocation(mainP,'uRM'),uFI=gl.getUniformLocation(mainP,'uFI'),uRes=gl.getUniformLocation(mainP,'uRes');
+        const puTx=gl.getUniformLocation(postP,'uTx'),puT=gl.getUniformLocation(postP,'uT'),puL=gl.getUniformLocation(postP,'uL'),puSS=gl.getUniformLocation(postP,'uSS'),puRes=gl.getUniformLocation(postP,'uRes');
+        
+        let pPos,pVel,pCol,pDat,posBuf,velBuf,colBuf,datBuf,vao;
+        
+        function initParticles(){
+            const N=params.particles;
+            pPos=new Float32Array(N*4);pVel=new Float32Array(N*4);pCol=new Float32Array(N*4);pDat=new Float32Array(N*4);
+            for(let i=0;i<N;i++){
+                const idx=i*4,th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1),ps=Math.random()*Math.PI*2,r=Math.pow(Math.random(),.33)*5;
+                pPos[idx]=r*Math.sin(ph)*Math.cos(th);pPos[idx+1]=r*Math.sin(ph)*Math.sin(th);pPos[idx+2]=r*Math.cos(ph);pPos[idx+3]=r*Math.sin(ps)*(Math.random()-.5)*2;
+                pVel[idx]=(Math.random()-.5)*.1;pVel[idx+1]=(Math.random()-.5)*.1;pVel[idx+2]=(Math.random()-.5)*.1;pVel[idx+3]=(Math.random()-.5)*.1;
+                pCol[idx]=Math.random();pCol[idx+1]=Math.random();pCol[idx+2]=Math.random();pCol[idx+3]=.3+Math.random()*.7;
+                pDat[idx]=Math.random();pDat[idx+1]=Math.random();pDat[idx+2]=Math.random();pDat[idx+3]=Math.random();
+            }
+            if(vao)gl.deleteVertexArray(vao);if(posBuf)gl.deleteBuffer(posBuf);if(velBuf)gl.deleteBuffer(velBuf);if(colBuf)gl.deleteBuffer(colBuf);if(datBuf)gl.deleteBuffer(datBuf);
+            vao=gl.createVertexArray();gl.bindVertexArray(vao);
+            posBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.bufferData(gl.ARRAY_BUFFER,pPos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,4,gl.FLOAT,false,0,0);
+            velBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,velBuf);gl.bufferData(gl.ARRAY_BUFFER,pVel,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,0,0);
+            colBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,colBuf);gl.bufferData(gl.ARRAY_BUFFER,pCol,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,4,gl.FLOAT,false,0,0);
+            datBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,datBuf);gl.bufferData(gl.ARRAY_BUFFER,pDat,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,0,0);
+            gl.bindVertexArray(null);
         }
         
-        // Combine with smooth operators
-        float d = mandelbulb;
-        d = mix(d, gyroid, 0.5 + 0.5 * sin(t * 0.3));
-        d = mix(d, schwarz, 0.3 + 0.3 * cos(t * 0.4));
-        d = mix(d, menger, 0.2 + 0.2 * sin(t * 0.5));
-        
-        return d + noise * 0.1;
-      }
-      
-      // Calculate normal using gradient
-      vec3 getNormal(vec3 p) {
-        float d = sceneSDF(p);
-        vec2 e = vec2(0.001, 0.0);
-        vec3 n = d - vec3(
-          sceneSDF(p - e.xyy),
-          sceneSDF(p - e.yxy),
-          sceneSDF(p - e.yyx)
-        );
-        return normalize(n);
-      }
-      
-      // Raymarching
-      float rayMarch(vec3 ro, vec3 rd) {
-        float dO = 0.0;
-        int steps = min(uMaxSteps, MAX_STEPS);
-        
-        for (int i = 0; i < MAX_STEPS; i++) {
-          if (i >= steps) break;
-          vec3 p = ro + rd * dO;
-          float dS = sceneSDF(p);
-          dO += dS;
-          if (dO > MAX_DIST || abs(dS) < SURF_DIST) break;
-        }
-        return dO;
-      }
-      
-      void main() {
-        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-        
-        float t = uTime * uIntensity * 0.3;
-        
-        // Camera setup with 4D-inspired rotation
-        vec3 ro = vec3(
-          3.0 * sin(t * 0.5),
-          2.0 * sin(t * 0.3),
-          3.0 * cos(t * 0.5)
-        );
-        
-        vec3 lookAt = vec3(0.0);
-        vec3 forward = normalize(lookAt - ro);
-        vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
-        vec3 up = cross(forward, right);
-        
-        vec3 rd = normalize(forward + uv.x * right + uv.y * up);
-        
-        float d = rayMarch(ro, rd);
-        
-        vec3 col = vec3(0.0);
-        
-        if (d < MAX_DIST) {
-          vec3 p = ro + rd * d;
-          vec3 n = getNormal(p);
-          
-          // Full spectrum coloring based on position and time
-          float hue = fract(
-            length(p) * 0.1 + 
-            t * 0.2 + 
-            dot(n, vec3(1.0)) * 0.3 +
-            fbm4D(vec4(p * 0.5, t * 0.5)) * 0.5
-          );
-          
-          vec3 baseColor = hsv2rgb(vec3(hue, 0.8, 1.0));
-          
-          // Complex lighting
-          vec3 lightPos = vec3(5.0 * sin(t), 5.0, 5.0 * cos(t));
-          vec3 lightDir = normalize(lightPos - p);
-          
-          float diff = max(dot(n, lightDir), 0.0);
-          float spec = pow(max(dot(reflect(-lightDir, n), -rd), 0.0), 32.0);
-          float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
-          
-          // Ambient occlusion approximation
-          float ao = 1.0;
-          for (int i = 1; i <= 5; i++) {
-            float dist = 0.1 * float(i);
-            ao -= (dist - sceneSDF(p + n * dist)) / pow(2.0, float(i));
-          }
-          ao = max(ao, 0.0);
-          
-          col = baseColor * (0.2 + 0.8 * diff) * ao;
-          col += vec3(1.0) * spec * 0.5;
-          col += hsv2rgb(vec3(fract(hue + 0.5), 0.5, 1.0)) * fresnel * 0.3;
-          
-          // Subsurface scattering approximation
-          float sss = max(dot(rd, -n), 0.0);
-          col += hsv2rgb(vec3(fract(hue + 0.3), 0.9, 0.5)) * sss * 0.2;
-        } else {
-          // Space background with color cycling
-          float stars = pow(noise4D(vec4(rd * 50.0, t * 0.1)), 20.0);
-          float nebula = fbm4D(vec4(rd * 3.0, t * 0.05));
-          
-          col = hsv2rgb(vec3(fract(t * 0.05 + nebula), 0.7, nebula * 0.3));
-          col += vec3(stars);
+        let fbo,fboTex;
+        function initFBO(){
+            if(fbo)gl.deleteFramebuffer(fbo);if(fboTex)gl.deleteTexture(fboTex);
+            fbo=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+            fboTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,fboTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,W,H,0,gl.RGBA,gl.FLOAT,null);
+            gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,fboTex,0);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
         }
         
-        // Post-processing
-        col = pow(col, vec3(0.8)); // Gamma
-        col *= 1.0 + 0.1 * sin(gl_FragCoord.y * 2.0 + t * 10.0); // Scanlines
+        const qVao=gl.createVertexArray();gl.bindVertexArray(qVao);const qBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,qBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);gl.bindVertexArray(null);
         
-        // Chromatic aberration
-        vec2 offset = (uv - 0.5) * 0.02 * uIntensity;
-        col.r *= 1.0 + length(offset);
-        col.b *= 1.0 - length(offset);
+        function persp(fov,asp,n,f){const t=1/Math.tan(fov/2);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)/(n-f),-1,0,0,2*f*n/(n-f),0]);}
+        function lookAt(e,t,u){const z=norm([e[0]-t[0],e[1]-t[1],e[2]-t[2]]),x=norm(cross(u,z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1]);}
+        function rotY(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,s,0,0,1,0,0,-s,0,c,0,0,0,0,1]);}
+        function norm(v){const l=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);return[v[0]/l,v[1]/l,v[2]/l];}
+        function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+        function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
         
-        fragColor = vec4(col, 1.0);
-      }
-    `;
-
-    // Compile shader helper
-    function compileShader(gl, source, type) {
-      const shader = gl.createShader(type);
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-        return null;
-      }
-      return shader;
-    }
-
-    // Create program helper
-    function createProgram(gl, vsSource, fsSource) {
-      const vs = compileShader(gl, vsSource, gl.VERTEX_SHADER);
-      const fs = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
-      const program = gl.createProgram();
-      gl.attachShader(program, vs);
-      gl.attachShader(program, fs);
-      gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error('Program link error:', gl.getProgramInfoLog(program));
-        return null;
-      }
-      return program;
-    }
-
-    // Create programs
-    const particleProgram = createProgram(gl, particleVS, particleFS);
-    const raymarchProgram = createProgram(gl, raymarchVS, raymarchFS);
-
-    // Particle system setup
-    let particleCount = 100000;
-    let particles = {
-      positions: null,
-      velocities: null,
-      lives: null,
-      sizes: null
-    };
-
-    function initParticles(count) {
-      particleCount = count;
-      particles.positions = new Float32Array(count * 3);
-      particles.velocities = new Float32Array(count * 3);
-      particles.lives = new Float32Array(count);
-      particles.sizes = new Float32Array(count);
-
-      for (let i = 0; i < count; i++) {
-        // Spherical distribution with 4D influence
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = Math.pow(Math.random(), 0.5) * 5;
-        
-        particles.positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        particles.positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        particles.positions[i * 3 + 2] = r * Math.cos(phi);
-        
-        particles.velocities[i * 3] = (Math.random() - 0.5) * 2;
-        particles.velocities[i * 3 + 1] = (Math.random() - 0.5) * 2;
-        particles.velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
-        
-        particles.lives[i] = Math.random();
-        particles.sizes[i] = Math.random() * 3 + 1;
-      }
-    }
-
-    initParticles(particleCount);
-
-    // Create buffers
-    const positionBuffer = gl.createBuffer();
-    const velocityBuffer = gl.createBuffer();
-    const lifeBuffer = gl.createBuffer();
-    const sizeBuffer = gl.createBuffer();
-
-    function updateParticleBuffers() {
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, particles.positions, gl.DYNAMIC_DRAW);
-      
-      gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, particles.velocities, gl.DYNAMIC_DRAW);
-      
-      gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, particles.lives, gl.DYNAMIC_DRAW);
-      
-      gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, particles.sizes, gl.DYNAMIC_DRAW);
-    }
-
-    updateParticleBuffers();
-
-    // Quad for raymarching
-    const quadBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1, 1, -1, -1, 1,
-      -1, 1, 1, -1, 1, 1
-    ]), gl.STATIC_DRAW);
-
-    // Matrix functions
-    function perspective(fov, aspect, near, far) {
-      const f = 1.0 / Math.tan(fov / 2);
-      const nf = 1 / (near - far);
-      return new Float32Array([
-        f / aspect, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, (far + near) * nf, -1,
-        0, 0, 2 * far * near * nf, 0
-      ]);
-    }
-
-    function lookAt(eye, center, up) {
-      const zAxis = normalize3(subtract3(eye, center));
-      const xAxis = normalize3(cross3(up, zAxis));
-      const yAxis = cross3(zAxis, xAxis);
-      
-      return new Float32Array([
-        xAxis[0], yAxis[0], zAxis[0], 0,
-        xAxis[1], yAxis[1], zAxis[1], 0,
-        xAxis[2], yAxis[2], zAxis[2], 0,
-        -dot3(xAxis, eye), -dot3(yAxis, eye), -dot3(zAxis, eye), 1
-      ]);
-    }
-
-    function identity() {
-      return new Float32Array([
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-      ]);
-    }
-
-    function rotateY(m, angle) {
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
-      return new Float32Array([
-        c * m[0] + s * m[8], c * m[1] + s * m[9], c * m[2] + s * m[10], c * m[3] + s * m[11],
-        m[4], m[5], m[6], m[7],
-        -s * m[0] + c * m[8], -s * m[1] + c * m[9], -s * m[2] + c * m[10], -s * m[3] + c * m[11],
-        m[12], m[13], m[14], m[15]
-      ]);
-    }
-
-    function subtract3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
-    function cross3(a, b) { return [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]]; }
-    function dot3(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
-    function normalize3(v) { const l = Math.sqrt(dot3(v, v)); return [v[0]/l, v[1]/l, v[2]/l]; }
-
-    // Performance tracking
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let fps = 0;
-    let drawCalls = 0;
-
-    // Get uniform locations
-    const particleUniforms = {
-      projection: gl.getUniformLocation(particleProgram, 'uProjection'),
-      view: gl.getUniformLocation(particleProgram, 'uView'),
-      model: gl.getUniformLocation(particleProgram, 'uModel'),
-      time: gl.getUniformLocation(particleProgram, 'uTime'),
-      intensity: gl.getUniformLocation(particleProgram, 'uIntensity')
-    };
-
-    const raymarchUniforms = {
-      time: gl.getUniformLocation(raymarchProgram, 'uTime'),
-      resolution: gl.getUniformLocation(raymarchProgram, 'uResolution'),
-      intensity: gl.getUniformLocation(raymarchProgram, 'uIntensity'),
-      maxSteps: gl.getUniformLocation(raymarchProgram, 'uMaxSteps')
-    };
-
-    // Get attribute locations
-    const particleAttribs = {
-      position: gl.getAttribLocation(particleProgram, 'aPosition'),
-      velocity: gl.getAttribLocation(particleProgram, 'aVelocity'),
-      life: gl.getAttribLocation(particleProgram, 'aLife'),
-      size: gl.getAttribLocation(particleProgram, 'aSize')
-    };
-
-    const raymarchAttribs = {
-      position: gl.getAttribLocation(raymarchProgram, 'aPosition')
-    };
-
-    // Controls
-    let intensity = 5;
-    let raymarchSteps = 128;
-    let rotSpeed = 5;
-
-    document.getElementById('intensity').addEventListener('input', (e) => {
-      intensity = parseFloat(e.target.value);
-    });
-
-    document.getElementById('particles').addEventListener('input', (e) => {
-      const newCount = parseInt(e.target.value);
-      if (newCount !== particleCount) {
-        initParticles(newCount);
-        updateParticleBuffers();
-      }
-    });
-
-    document.getElementById('raymarchSteps').addEventListener('input', (e) => {
-      raymarchSteps = parseInt(e.target.value);
-    });
-
-    document.getElementById('rotSpeed').addEventListener('input', (e) => {
-      rotSpeed = parseFloat(e.target.value);
-    });
-
-    // Main render loop
-    function render(time) {
-      const t = time * 0.001;
-      drawCalls = 0;
-
-      // Update particles (simulate on CPU for extra stress)
-      for (let i = 0; i < particleCount; i++) {
-        const idx = i * 3;
-        
-        // Update positions with complex 4D-influenced motion
-        particles.positions[idx] += particles.velocities[idx] * 0.01 * intensity;
-        particles.positions[idx + 1] += particles.velocities[idx + 1] * 0.01 * intensity;
-        particles.positions[idx + 2] += particles.velocities[idx + 2] * 0.01 * intensity;
-        
-        // Add 4D rotation influence
-        const x = particles.positions[idx];
-        const y = particles.positions[idx + 1];
-        const z = particles.positions[idx + 2];
-        const w = Math.sin(t * rotSpeed * 0.1 + particles.lives[i] * 6.28);
-        
-        // Project back (simulated 4D behavior)
-        const scale = 1.0 / (2.0 - w * 0.5);
-        particles.velocities[idx] += (x * scale - x) * 0.1;
-        particles.velocities[idx + 1] += (y * scale - y) * 0.1;
-        particles.velocities[idx + 2] += (z * scale - z) * 0.1;
-        
-        // Boundary check with wrap-around
-        for (let j = 0; j < 3; j++) {
-          if (Math.abs(particles.positions[idx + j]) > 10) {
-            particles.positions[idx + j] *= -0.9;
-            particles.velocities[idx + j] *= -0.5;
-          }
+        function updatePhysics(dt,t){
+            const N=params.particles,it=params.physicsIter;
+            for(let j=0;j<it;j++){
+                const sdt=dt/it;
+                for(let i=0;i<N;i++){
+                    const idx=i*4;
+                    let x=pPos[idx],y=pPos[idx+1],z=pPos[idx+2],w=pPos[idx+3],vx=pVel[idx],vy=pVel[idx+1],vz=pVel[idx+2],vw=pVel[idx+3];
+                    const r=Math.sqrt(x*x+y*y+z*z+w*w)+.001,r3=r*r*r,gv=-2/r3;
+                    let ax=x*gv,ay=y*gv,az=z*gv,aw=w*gv;
+                    const rt=.5;ax+=-y*rt;ay+=x*rt;az+=-w*rt*.5;aw+=z*rt*.5;
+                    const tb=.3;ax+=Math.sin(y*3+t)*tb;ay+=Math.sin(z*3+t*1.1)*tb;az+=Math.sin(w*3+t*1.2)*tb;aw+=Math.sin(x*3+t*1.3)*tb;
+                    const sg=10,rh=28,bt=8/3;ax+=(sg*(y-x))*.01;ay+=(x*(rh-z)-y)*.01;az+=(x*y-bt*z)*.01;
+                    vx+=ax*sdt;vy+=ay*sdt;vz+=az*sdt;vw+=aw*sdt;
+                    const dp=.999;vx*=dp;vy*=dp;vz*=dp;vw*=dp;
+                    x+=vx*sdt;y+=vy*sdt;z+=vz*sdt;w+=vw*sdt;
+                    const bd=10;
+                    if(Math.abs(x)>bd){x=Math.sign(x)*bd;vx*=-.5;}if(Math.abs(y)>bd){y=Math.sign(y)*bd;vy*=-.5;}if(Math.abs(z)>bd){z=Math.sign(z)*bd;vz*=-.5;}if(Math.abs(w)>bd){w=Math.sign(w)*bd;vw*=-.5;}
+                    pPos[idx]=x;pPos[idx+1]=y;pPos[idx+2]=z;pPos[idx+3]=w;pVel[idx]=vx;pVel[idx+1]=vy;pVel[idx+2]=vz;pVel[idx+3]=vw;
+                    pDat[idx]=(pDat[idx]+sdt*.1)%1;
+                }
+            }
+            gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.bufferSubData(gl.ARRAY_BUFFER,0,pPos);gl.bindBuffer(gl.ARRAY_BUFFER,velBuf);gl.bufferSubData(gl.ARRAY_BUFFER,0,pVel);gl.bindBuffer(gl.ARRAY_BUFFER,datBuf);gl.bufferSubData(gl.ARRAY_BUFFER,0,pDat);
         }
         
-        // Update life for color cycling
-        particles.lives[i] = (particles.lives[i] + 0.001 * intensity) % 1.0;
-      }
-      
-      updateParticleBuffers();
-
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl.enable(gl.DEPTH_TEST);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-
-      // Render raymarched background
-      gl.useProgram(raymarchProgram);
-      gl.uniform1f(raymarchUniforms.time, t);
-      gl.uniform2f(raymarchUniforms.resolution, canvas.width, canvas.height);
-      gl.uniform1f(raymarchUniforms.intensity, intensity * 0.2);
-      gl.uniform1i(raymarchUniforms.maxSteps, raymarchSteps);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-      gl.enableVertexAttribArray(raymarchAttribs.position);
-      gl.vertexAttribPointer(raymarchAttribs.position, 2, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      drawCalls++;
-
-      // Render particles
-      gl.useProgram(particleProgram);
-      
-      const aspect = canvas.width / canvas.height;
-      const projection = perspective(Math.PI / 4, aspect, 0.1, 100);
-      
-      const camX = Math.sin(t * 0.3 * rotSpeed * 0.1) * 15;
-      const camY = Math.sin(t * 0.2 * rotSpeed * 0.1) * 5 + 5;
-      const camZ = Math.cos(t * 0.3 * rotSpeed * 0.1) * 15;
-      const view = lookAt([camX, camY, camZ], [0, 0, 0], [0, 1, 0]);
-      const model = rotateY(identity(), t * 0.5 * rotSpeed * 0.1);
-
-      gl.uniformMatrix4fv(particleUniforms.projection, false, projection);
-      gl.uniformMatrix4fv(particleUniforms.view, false, view);
-      gl.uniformMatrix4fv(particleUniforms.model, false, model);
-      gl.uniform1f(particleUniforms.time, t);
-      gl.uniform1f(particleUniforms.intensity, intensity * 0.2);
-
-      // Bind particle attributes
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.enableVertexAttribArray(particleAttribs.position);
-      gl.vertexAttribPointer(particleAttribs.position, 3, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
-      gl.enableVertexAttribArray(particleAttribs.velocity);
-      gl.vertexAttribPointer(particleAttribs.velocity, 3, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuffer);
-      gl.enableVertexAttribArray(particleAttribs.life);
-      gl.vertexAttribPointer(particleAttribs.life, 1, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
-      gl.enableVertexAttribArray(particleAttribs.size);
-      gl.vertexAttribPointer(particleAttribs.size, 1, gl.FLOAT, false, 0, 0);
-
-      // Multiple draw calls for extra stress
-      for (let i = 0; i < intensity; i++) {
-        gl.drawArrays(gl.POINTS, 0, particleCount);
-        drawCalls++;
-      }
-
-      // Update stats
-      frameCount++;
-      const currentTime = performance.now();
-      if (currentTime - lastTime >= 1000) {
-        fps = frameCount;
-        frameCount = 0;
-        lastTime = currentTime;
+        let lastT=performance.now(),fCnt=0,fps=0,ft=0;
+        function updateStats(dt){fCnt++;if(performance.now()-lastT>1000){fps=fCnt;fCnt=0;lastT=performance.now();}ft=dt.toFixed(1);document.getElementById('fps').textContent=fps;document.getElementById('frametime').textContent=ft;document.getElementById('gpuload').textContent=Math.min(100,Math.round(dt/16.67*100));document.getElementById('activeP').textContent=params.particles.toLocaleString();document.getElementById('shaderOps').textContent=(params.particles*params.raymarchSteps*params.layers).toLocaleString();}
         
-        document.getElementById('fps').textContent = fps;
-        document.getElementById('frameTime').textContent = (1000 / fps).toFixed(2);
-        document.getElementById('particleCount').textContent = particleCount.toLocaleString();
-        document.getElementById('drawCalls').textContent = drawCalls;
-        document.getElementById('triangles').textContent = (particleCount * intensity * 2).toLocaleString();
+        resize();initParticles();
         
-        const load = fps < 30 ? 'CRITICAL' : fps < 45 ? 'EXTREME' : fps < 55 ? 'HIGH' : 'MODERATE';
-        document.getElementById('gpuLoad').textContent = load;
-        document.getElementById('gpuLoad').style.color = fps < 30 ? '#f00' : fps < 45 ? '#f80' : '#0f0';
-      }
-
-      requestAnimationFrame(render);
-    }
-
-    // Handle resize
-    window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    });
-
-    // Start rendering
-    requestAnimationFrame(render);
-  </script>
+        let prevT=0;
+        function render(time){
+            const t=time*.001,dt=time-prevT;prevT=time;
+            updateStats(dt);updatePhysics(Math.min(dt*.001,.033),t);
+            gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.viewport(0,0,W,H);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);
+            gl.useProgram(mainP);
+            const proj=persp(Math.PI/3,W/H,.1,100),cd=15,eye=[Math.sin(t*.2)*cd,Math.sin(t*.15)*5,Math.cos(t*.2)*cd],view=lookAt(eye,[0,0,0],[0,1,0]),model=rotY(t*.1);
+            gl.uniformMatrix4fv(uProj,false,proj);gl.uniformMatrix4fv(uView,false,view);gl.uniformMatrix4fv(uModel,false,model);gl.uniform1f(uT,t);gl.uniform1f(uSz,3);gl.uniform1i(uRM,params.raymarchSteps);gl.uniform1i(uFI,params.fractalIter);gl.uniform2f(uRes,W,H);
+            gl.bindVertexArray(vao);gl.drawArrays(gl.POINTS,0,params.particles);
+            gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
+            gl.useProgram(postP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,fboTex);gl.uniform1i(puTx,0);gl.uniform1f(puT,t);gl.uniform1i(puL,params.layers);gl.uniform1i(puSS,params.supersample);gl.uniform2f(puRes,W,H);
+            gl.bindVertexArray(qVao);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+            requestAnimationFrame(render);
+        }
+        requestAnimationFrame(render);
+    </script>
 </body>
 </html>
