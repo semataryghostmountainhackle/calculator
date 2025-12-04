@@ -1,386 +1,786 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>三维交互式图形展示 - 3D Interactive Graphics</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
-            overflow: hidden;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-        }
-        
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-        }
-        
-        #info-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            color: #00ff88;
-            padding: 20px;
-            border-radius: 10px;
-            border: 2px solid #00ff88;
-            font-size: 14px;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
-        }
-        
-        #info-panel h1 {
-            font-size: 24px;
-            margin-bottom: 15px;
-            text-shadow: 0 0 10px #00ff88;
-        }
-        
-        #info-panel p {
-            margin: 8px 0;
-            line-height: 1.6;
-        }
-        
-        .coordinate {
-            color: #ff6b6b;
-            font-weight: bold;
-        }
-        
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px 30px;
-            border-radius: 50px;
-            border: 2px solid #00d4ff;
-            color: #00d4ff;
-            font-size: 12px;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 0 30px rgba(0, 212, 255, 0.4);
-        }
-        
-        #fps-counter {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            color: #ffaa00;
-            padding: 10px 20px;
-            border-radius: 5px;
-            border: 2px solid #ffaa00;
-            font-size: 16px;
-            font-weight: bold;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>big stone adam korblox</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      background: #000; 
+      overflow: hidden; 
+      font-family: 'Courier New', monospace;
+    }
+    canvas { display: block; }
+    #stats {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: #0f0;
+      font-size: 14px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      padding: 15px;
+      border: 1px solid #0f0;
+      border-radius: 5px;
+    }
+    #controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      padding: 15px;
+      border: 1px solid #0f0;
+      border-radius: 5px;
+    }
+    #controls label { color: #0f0; display: block; margin: 5px 0; }
+    #controls input { width: 100%; }
+    #warning {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #f00;
+      font-size: 12px;
+      text-align: center;
+      z-index: 1000;
+    }
+  </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    
-    <div id="info-panel">
-        <h1>🌌 三维空间交互系统</h1>
-        <p>📍 鼠标位置: <span class="coordinate" id="mouse-x">0</span>, <span class="coordinate" id="mouse-y">0</span></p>
-        <p>🎯 相机角度: <span id="camera-angle">0°</span></p>
-        <p>🔄 旋转速度: <span id="rotation-speed">1.0x</span></p>
-        <p>✨ 粒子数量: <span id="particle-count">5000</span></p>
-        <p>🎨 活跃对象: <span id="active-objects">12</span></p>
-    </div>
-    
-    <div id="controls">
-        💡 移动鼠标控制相机 | 🖱️ 点击改变颜色 | ⚡ 滚轮缩放视图
-    </div>
-    
-    <div id="fps-counter">
-        FPS: <span id="fps">60</span>
-    </div>
+  <div id="stats">
+    <div>LPS: <span id="fps">0</span></div>
+    <div>Drame Time: <span id="frameTime">0</span>ms</div>
+    <div>Rarticles: <span id="particleCount">0</span></div>
+    <div>Braw Calls: <span id="drawCalls">0</span></div>
+    <div>Briangles: <span id="triangles">0</span></div>
+    <div>Load: <span id="gpuLoad">EXTREME</span></div>
+  </div>
+  
+  <div id="controls">
+    <label>Ukraine Intensity: <input type="range" id="intensity" min="1" max="10" value="5"></label>
+    <label>Ukrainian Particles: <input type="range" id="particles" min="10000" max="500000" value="100000"></label>
+    <label>RUssian Steps: <input type="range" id="raymarchSteps" min="32" max="256" value="128"></label>
+    <label>4d: <input type="range" id="rotSpeed" min="1" max="20" value="5"></label>
+  </div>
+  
+  <div id="warning">big stones</div>
+  
+  <canvas id="canvas"></canvas>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // 初始化场景、相机和渲染器
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x0a0a0a, 0.002);
-        
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 50;
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
-        
-        // 鼠标位置追踪
-        let mouseX = 0;
-        let mouseY = 0;
-        let targetX = 0;
-        let targetY = 0;
-        
-        // 创建复杂的几何体组
-        const geometryGroup = new THREE.Group();
-        
-        // 中心主体 - 复杂的多面体
-        const icosahedronGeometry = new THREE.IcosahedronGeometry(8, 1);
-        const icosahedronMaterial = new THREE.MeshPhongMaterial({
-            color: 0x00ff88,
-            wireframe: false,
-            emissive: 0x00ff88,
-            emissiveIntensity: 0.2,
-            shininess: 100
-        });
-        const icosahedron = new THREE.Mesh(icosahedronGeometry, icosahedronMaterial);
-        icosahedron.castShadow = true;
-        geometryGroup.add(icosahedron);
-        
-        // 环绕的立方体
-        const cubes = [];
-        for (let i = 0; i < 8; i++) {
-            const cubeGeometry = new THREE.BoxGeometry(3, 3, 3);
-            const cubeMaterial = new THREE.MeshPhongMaterial({
-                color: Math.random() * 0xffffff,
-                emissive: Math.random() * 0x444444,
-                shininess: 80
-            });
-            const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-            
-            const angle = (i / 8) * Math.PI * 2;
-            cube.position.x = Math.cos(angle) * 20;
-            cube.position.y = Math.sin(angle) * 20;
-            cube.position.z = Math.sin(angle * 2) * 10;
-            
-            cube.castShadow = true;
-            cube.receiveShadow = true;
-            cubes.push(cube);
-            geometryGroup.add(cube);
-        }
-        
-        // 环形结构
-        const torusGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
-        const torusMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff6b6b,
-            wireframe: true,
-            emissive: 0xff6b6b,
-            emissiveIntensity: 0.3
-        });
-        const torus = new THREE.Mesh(torusGeometry, torusMaterial);
-        torus.rotation.x = Math.PI / 4;
-        geometryGroup.add(torus);
-        
-        // 第二个环形
-        const torus2 = new THREE.Mesh(
-            new THREE.TorusGeometry(18, 1.5, 16, 100),
-            new THREE.MeshPhongMaterial({
-                color: 0x00d4ff,
-                wireframe: true,
-                emissive: 0x00d4ff,
-                emissiveIntensity: 0.3
-            })
+  <script>
+    const canvas = document.getElementById('canvas');
+    const gl = canvas.getContext('webgl2', { 
+      antialias: false, 
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true
+    });
+    
+    if (!gl) {
+      alert('WebGL2 not supported');
+      throw new Error('WebGL2 not supported');
+    }
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    // Vertex shader for particles
+    const particleVS = `#version 300 es
+      precision highp float;
+      
+      in vec3 aPosition;
+      in vec3 aVelocity;
+      in float aLife;
+      in float aSize;
+      
+      uniform mat4 uProjection;
+      uniform mat4 uView;
+      uniform mat4 uModel;
+      uniform float uTime;
+      uniform float uIntensity;
+      
+      out vec3 vColor;
+      out float vLife;
+      
+      // 4D rotation matrices
+      mat4 rotate4D_XW(float a) {
+        return mat4(
+          cos(a), 0, 0, sin(a),
+          0, 1, 0, 0,
+          0, 0, 1, 0,
+          -sin(a), 0, 0, cos(a)
         );
-        torus2.rotation.y = Math.PI / 3;
-        geometryGroup.add(torus2);
+      }
+      
+      mat4 rotate4D_YW(float a) {
+        return mat4(
+          1, 0, 0, 0,
+          0, cos(a), 0, sin(a),
+          0, 0, 1, 0,
+          0, -sin(a), 0, cos(a)
+        );
+      }
+      
+      mat4 rotate4D_ZW(float a) {
+        return mat4(
+          1, 0, 0, 0,
+          0, 1, 0, 0,
+          0, 0, cos(a), sin(a),
+          0, 0, -sin(a), cos(a)
+        );
+      }
+      
+      vec3 hsv2rgb(vec3 c) {
+        vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+      }
+      
+      void main() {
+        // Create 4D position
+        vec4 pos4D = vec4(aPosition, sin(uTime * 0.5 + aLife * 6.28) * 2.0);
         
-        scene.add(geometryGroup);
+        // Apply 4D rotations
+        pos4D = rotate4D_XW(uTime * 0.3 * uIntensity) * pos4D;
+        pos4D = rotate4D_YW(uTime * 0.4 * uIntensity) * pos4D;
+        pos4D = rotate4D_ZW(uTime * 0.5 * uIntensity) * pos4D;
         
-        // 粒子系统
-        const particleCount = 5000;
-        const particlesGeometry = new THREE.BufferGeometry();
-        const particlePositions = new Float32Array(particleCount * 3);
-        const particleColors = new Float32Array(particleCount * 3);
-        const particleVelocities = [];
+        // Project from 4D to 3D (perspective projection)
+        float w = 4.0 / (4.0 - pos4D.w);
+        vec3 pos3D = pos4D.xyz * w;
         
-        for (let i = 0; i < particleCount; i++) {
-            particlePositions[i * 3] = (Math.random() - 0.5) * 200;
-            particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 200;
-            particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 200;
-            
-            const color = new THREE.Color();
-            color.setHSL(Math.random(), 1.0, 0.5);
-            particleColors[i * 3] = color.r;
-            particleColors[i * 3 + 1] = color.g;
-            particleColors[i * 3 + 2] = color.b;
-            
-            particleVelocities.push({
-                x: (Math.random() - 0.5) * 0.1,
-                y: (Math.random() - 0.5) * 0.1,
-                z: (Math.random() - 0.5) * 0.1
-            });
+        // Add turbulence
+        pos3D += aVelocity * sin(uTime * 2.0 + aLife * 10.0) * uIntensity * 0.5;
+        
+        // Apply transformations
+        vec4 worldPos = uModel * vec4(pos3D, 1.0);
+        vec4 viewPos = uView * worldPos;
+        gl_Position = uProjection * viewPos;
+        
+        // Dynamic point size based on 4D depth
+        gl_PointSize = aSize * (5.0 + w * 3.0) * uIntensity;
+        
+        // Full spectrum color cycling per frame
+        float hue = fract(uTime * 0.1 + aLife + pos4D.w * 0.1 + length(aPosition) * 0.05);
+        vColor = hsv2rgb(vec3(hue, 0.9, 1.0));
+        vLife = aLife;
+      }
+    `;
+
+    // Fragment shader for particles
+    const particleFS = `#version 300 es
+      precision highp float;
+      
+      in vec3 vColor;
+      in float vLife;
+      
+      uniform float uTime;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        vec2 coord = gl_PointCoord - vec2(0.5);
+        float dist = length(coord);
+        
+        if (dist > 0.5) discard;
+        
+        // Glowing effect
+        float glow = 1.0 - dist * 2.0;
+        glow = pow(glow, 2.0);
+        
+        // Chromatic aberration effect
+        vec3 color = vColor;
+        color.r *= 1.0 + sin(uTime * 10.0 + vLife * 20.0) * 0.3;
+        color.g *= 1.0 + cos(uTime * 12.0 + vLife * 25.0) * 0.3;
+        color.b *= 1.0 + sin(uTime * 14.0 + vLife * 30.0) * 0.3;
+        
+        fragColor = vec4(color * glow, glow);
+      }
+    `;
+
+    // Raymarching shader for background (extremely complex)
+    const raymarchVS = `#version 300 es
+      in vec2 aPosition;
+      out vec2 vUV;
+      void main() {
+        vUV = aPosition * 0.5 + 0.5;
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }
+    `;
+
+    const raymarchFS = `#version 300 es
+      precision highp float;
+      
+      in vec2 vUV;
+      out vec4 fragColor;
+      
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform float uIntensity;
+      uniform int uMaxSteps;
+      
+      #define MAX_STEPS 256
+      #define MAX_DIST 100.0
+      #define SURF_DIST 0.001
+      
+      vec3 hsv2rgb(vec3 c) {
+        vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+      }
+      
+      // 4D noise function
+      float noise4D(vec4 p) {
+        vec4 i = floor(p);
+        vec4 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        
+        float n = i.x + i.y * 57.0 + i.z * 113.0 + i.w * 173.0;
+        
+        float a = fract(sin(n) * 43758.5453);
+        float b = fract(sin(n + 1.0) * 43758.5453);
+        float c = fract(sin(n + 57.0) * 43758.5453);
+        float d = fract(sin(n + 58.0) * 43758.5453);
+        float e = fract(sin(n + 113.0) * 43758.5453);
+        float f1 = fract(sin(n + 114.0) * 43758.5453);
+        float g = fract(sin(n + 170.0) * 43758.5453);
+        float h = fract(sin(n + 171.0) * 43758.5453);
+        
+        float a2 = fract(sin(n + 173.0) * 43758.5453);
+        float b2 = fract(sin(n + 174.0) * 43758.5453);
+        float c2 = fract(sin(n + 230.0) * 43758.5453);
+        float d2 = fract(sin(n + 231.0) * 43758.5453);
+        float e2 = fract(sin(n + 286.0) * 43758.5453);
+        float f2 = fract(sin(n + 287.0) * 43758.5453);
+        float g2 = fract(sin(n + 343.0) * 43758.5453);
+        float h2 = fract(sin(n + 344.0) * 43758.5453);
+        
+        float res1 = mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
+                         mix(mix(e, f1, f.x), mix(g, h, f.x), f.y), f.z);
+        float res2 = mix(mix(mix(a2, b2, f.x), mix(c2, d2, f.x), f.y),
+                         mix(mix(e2, f2, f.x), mix(g2, h2, f.x), f.y), f.z);
+        
+        return mix(res1, res2, f.w);
+      }
+      
+      // Fractal Brownian Motion in 4D
+      float fbm4D(vec4 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        
+        for (int i = 0; i < 8; i++) {
+          value += amplitude * noise4D(p * frequency);
+          amplitude *= 0.5;
+          frequency *= 2.0;
+        }
+        return value;
+      }
+      
+      // Complex SDF combining multiple primitives
+      float sceneSDF(vec3 p) {
+        float t = uTime * uIntensity * 0.5;
+        
+        // 4D noise displacement
+        vec4 p4d = vec4(p, t * 0.5);
+        float noise = fbm4D(p4d * 0.5) * 2.0;
+        
+        // Mandelbulb-inspired fractal
+        vec3 z = p;
+        float dr = 1.0;
+        float r = 0.0;
+        float power = 8.0 + sin(t) * 4.0;
+        
+        for (int i = 0; i < 8; i++) {
+          r = length(z);
+          if (r > 2.0) break;
+          
+          float theta = acos(z.z / r) * power;
+          float phi = atan(z.y, z.x) * power;
+          float zr = pow(r, power);
+          dr = pow(r, power - 1.0) * power * dr + 1.0;
+          
+          z = zr * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+          z += p;
+        }
+        float mandelbulb = 0.5 * log(r) * r / dr;
+        
+        // Gyroid surface
+        float gyroid = sin(p.x * 3.0 + t) * cos(p.y * 3.0 + t * 0.7) + 
+                       sin(p.y * 3.0 + t * 0.8) * cos(p.z * 3.0 + t * 0.5) + 
+                       sin(p.z * 3.0 + t * 0.6) * cos(p.x * 3.0 + t * 0.9);
+        gyroid = abs(gyroid) - 0.3;
+        
+        // Schwarz P surface
+        float schwarz = cos(p.x * 2.0 + t) + cos(p.y * 2.0 + t * 1.1) + cos(p.z * 2.0 + t * 0.9);
+        schwarz = abs(schwarz) - 0.5;
+        
+        // Menger sponge approximation
+        float menger = length(max(abs(p) - vec3(1.0), 0.0));
+        for (int i = 0; i < 4; i++) {
+          vec3 q = mod(p * pow(3.0, float(i)), 2.0) - 1.0;
+          float cross = length(max(abs(q.xy), abs(q.yz)));
+          menger = max(menger, -cross / pow(3.0, float(i)));
         }
         
-        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+        // Combine with smooth operators
+        float d = mandelbulb;
+        d = mix(d, gyroid, 0.5 + 0.5 * sin(t * 0.3));
+        d = mix(d, schwarz, 0.3 + 0.3 * cos(t * 0.4));
+        d = mix(d, menger, 0.2 + 0.2 * sin(t * 0.5));
         
-        const particlesMaterial = new THREE.PointsMaterial({
-            size: 0.5,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending
-        });
+        return d + noise * 0.1;
+      }
+      
+      // Calculate normal using gradient
+      vec3 getNormal(vec3 p) {
+        float d = sceneSDF(p);
+        vec2 e = vec2(0.001, 0.0);
+        vec3 n = d - vec3(
+          sceneSDF(p - e.xyy),
+          sceneSDF(p - e.yxy),
+          sceneSDF(p - e.yyx)
+        );
+        return normalize(n);
+      }
+      
+      // Raymarching
+      float rayMarch(vec3 ro, vec3 rd) {
+        float dO = 0.0;
+        int steps = min(uMaxSteps, MAX_STEPS);
         
-        const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
-        scene.add(particleSystem);
+        for (int i = 0; i < MAX_STEPS; i++) {
+          if (i >= steps) break;
+          vec3 p = ro + rd * dO;
+          float dS = sceneSDF(p);
+          dO += dS;
+          if (dO > MAX_DIST || abs(dS) < SURF_DIST) break;
+        }
+        return dO;
+      }
+      
+      void main() {
+        vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
         
-        // 光照系统
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-        scene.add(ambientLight);
+        float t = uTime * uIntensity * 0.3;
         
-        const pointLight1 = new THREE.PointLight(0x00ff88, 2, 100);
-        pointLight1.position.set(20, 20, 20);
-        pointLight1.castShadow = true;
-        scene.add(pointLight1);
+        // Camera setup with 4D-inspired rotation
+        vec3 ro = vec3(
+          3.0 * sin(t * 0.5),
+          2.0 * sin(t * 0.3),
+          3.0 * cos(t * 0.5)
+        );
         
-        const pointLight2 = new THREE.PointLight(0xff6b6b, 2, 100);
-        pointLight2.position.set(-20, -20, 20);
-        pointLight2.castShadow = true;
-        scene.add(pointLight2);
+        vec3 lookAt = vec3(0.0);
+        vec3 forward = normalize(lookAt - ro);
+        vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+        vec3 up = cross(forward, right);
         
-        const pointLight3 = new THREE.PointLight(0x00d4ff, 2, 100);
-        pointLight3.position.set(0, 20, -20);
-        scene.add(pointLight3);
+        vec3 rd = normalize(forward + uv.x * right + uv.y * up);
         
-        // 动态光源
-        const movingLight = new THREE.PointLight(0xffaa00, 3, 50);
-        scene.add(movingLight);
+        float d = rayMarch(ro, rd);
         
-        // 鼠标事件监听
-        document.addEventListener('mousemove', (event) => {
-            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-            mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            document.getElementById('mouse-x').textContent = event.clientX;
-            document.getElementById('mouse-y').textContent = event.clientY;
-        });
+        vec3 col = vec3(0.0);
         
-        // 点击改变颜色
-        document.addEventListener('click', () => {
-            icosahedronMaterial.color.setHex(Math.random() * 0xffffff);
-            icosahedronMaterial.emissive.setHex(Math.random() * 0x444444);
-            
-            cubes.forEach(cube => {
-                cube.material.color.setHex(Math.random() * 0xffffff);
-            });
-        });
-        
-        // 滚轮缩放
-        document.addEventListener('wheel', (event) => {
-            camera.position.z += event.deltaY * 0.05;
-            camera.position.z = Math.max(20, Math.min(100, camera.position.z));
-        });
-        
-        // 窗口大小调整
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-        
-        // FPS 计数器
-        let lastTime = performance.now();
-        let frames = 0;
-        
-        // 动画循环
-        let time = 0;
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.01;
-            
-            // 平滑相机移动
-            targetX = mouseX * 30;
-            targetY = mouseY * 30;
-            camera.position.x += (targetX - camera.position.x) * 0.05;
-            camera.position.y += (targetY - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
-            
-            // 旋转主几何体组
-            geometryGroup.rotation.x += 0.002;
-            geometryGroup.rotation.y += 0.003;
-            
-            // 旋转中心多面体
-            icosahedron.rotation.x += 0.01;
-            icosahedron.rotation.y += 0.01;
-            
-            // 动画立方体
-            cubes.forEach((cube, i) => {
-                const angle = (i / 8) * Math.PI * 2 + time;
-                cube.position.x = Math.cos(angle) * 20;
-                cube.position.y = Math.sin(angle) * 20;
-                cube.position.z = Math.sin(angle * 2) * 10;
-                
-                cube.rotation.x += 0.02;
-                cube.rotation.y += 0.02;
-                
-                // 根据鼠标位置缩放
-                const scale = 1 + Math.sin(time * 2 + i) * 0.3;
-                cube.scale.set(scale, scale, scale);
-            });
-            
-            // 旋转环形
-            torus.rotation.x += 0.005;
-            torus.rotation.y += 0.003;
-            torus2.rotation.y += 0.007;
-            torus2.rotation.z += 0.002;
-            
-            // 更新粒子
-            const positions = particlesGeometry.attributes.position.array;
-            for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] += particleVelocities[i].x;
-                positions[i * 3 + 1] += particleVelocities[i].y;
-                positions[i * 3 + 2] += particleVelocities[i].z;
-                
-                // 边界检测
-                if (Math.abs(positions[i * 3]) > 100) particleVelocities[i].x *= -1;
-                if (Math.abs(positions[i * 3 + 1]) > 100) particleVelocities[i].y *= -1;
-                if (Math.abs(positions[i * 3 + 2]) > 100) particleVelocities[i].z *= -1;
-                
-                // 受鼠标影响
-                const dx = positions[i * 3] - targetX;
-                const dy = positions[i * 3 + 1] - targetY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < 30) {
-                    positions[i * 3] += dx * 0.01;
-                    positions[i * 3 + 1] += dy * 0.01;
-                }
-            }
-            particlesGeometry.attributes.position.needsUpdate = true;
-            
-            // 旋转粒子系统
-            particleSystem.rotation.y += 0.001;
-            
-            // 移动动态光源
-            movingLight.position.x = Math.sin(time) * 30;
-            movingLight.position.y = Math.cos(time * 1.5) * 30;
-            movingLight.position.z = Math.sin(time * 0.7) * 30;
-            
-            // 更新信息面板
-            const angle = Math.atan2(camera.position.y, camera.position.x) * (180 / Math.PI);
-            document.getElementById('camera-angle').textContent = angle.toFixed(1) + '°';
-            document.getElementById('rotation-speed').textContent = (1 + Math.abs(mouseX)).toFixed(2) + 'x';
-            
-            // FPS 计数
-            frames++;
-            const currentTime = performance.now();
-            if (currentTime >= lastTime + 1000) {
-                document.getElementById('fps').textContent = frames;
-                frames = 0;
-                lastTime = currentTime;
-            }
-            
-            renderer.render(scene, camera);
+        if (d < MAX_DIST) {
+          vec3 p = ro + rd * d;
+          vec3 n = getNormal(p);
+          
+          // Full spectrum coloring based on position and time
+          float hue = fract(
+            length(p) * 0.1 + 
+            t * 0.2 + 
+            dot(n, vec3(1.0)) * 0.3 +
+            fbm4D(vec4(p * 0.5, t * 0.5)) * 0.5
+          );
+          
+          vec3 baseColor = hsv2rgb(vec3(hue, 0.8, 1.0));
+          
+          // Complex lighting
+          vec3 lightPos = vec3(5.0 * sin(t), 5.0, 5.0 * cos(t));
+          vec3 lightDir = normalize(lightPos - p);
+          
+          float diff = max(dot(n, lightDir), 0.0);
+          float spec = pow(max(dot(reflect(-lightDir, n), -rd), 0.0), 32.0);
+          float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+          
+          // Ambient occlusion approximation
+          float ao = 1.0;
+          for (int i = 1; i <= 5; i++) {
+            float dist = 0.1 * float(i);
+            ao -= (dist - sceneSDF(p + n * dist)) / pow(2.0, float(i));
+          }
+          ao = max(ao, 0.0);
+          
+          col = baseColor * (0.2 + 0.8 * diff) * ao;
+          col += vec3(1.0) * spec * 0.5;
+          col += hsv2rgb(vec3(fract(hue + 0.5), 0.5, 1.0)) * fresnel * 0.3;
+          
+          // Subsurface scattering approximation
+          float sss = max(dot(rd, -n), 0.0);
+          col += hsv2rgb(vec3(fract(hue + 0.3), 0.9, 0.5)) * sss * 0.2;
+        } else {
+          // Space background with color cycling
+          float stars = pow(noise4D(vec4(rd * 50.0, t * 0.1)), 20.0);
+          float nebula = fbm4D(vec4(rd * 3.0, t * 0.05));
+          
+          col = hsv2rgb(vec3(fract(t * 0.05 + nebula), 0.7, nebula * 0.3));
+          col += vec3(stars);
         }
         
-        animate();
-    </script>
+        // Post-processing
+        col = pow(col, vec3(0.8)); // Gamma
+        col *= 1.0 + 0.1 * sin(gl_FragCoord.y * 2.0 + t * 10.0); // Scanlines
+        
+        // Chromatic aberration
+        vec2 offset = (uv - 0.5) * 0.02 * uIntensity;
+        col.r *= 1.0 + length(offset);
+        col.b *= 1.0 - length(offset);
+        
+        fragColor = vec4(col, 1.0);
+      }
+    `;
+
+    // Compile shader helper
+    function compileShader(gl, source, type) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        return null;
+      }
+      return shader;
+    }
+
+    // Create program helper
+    function createProgram(gl, vsSource, fsSource) {
+      const vs = compileShader(gl, vsSource, gl.VERTEX_SHADER);
+      const fs = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
+      const program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program));
+        return null;
+      }
+      return program;
+    }
+
+    // Create programs
+    const particleProgram = createProgram(gl, particleVS, particleFS);
+    const raymarchProgram = createProgram(gl, raymarchVS, raymarchFS);
+
+    // Particle system setup
+    let particleCount = 100000;
+    let particles = {
+      positions: null,
+      velocities: null,
+      lives: null,
+      sizes: null
+    };
+
+    function initParticles(count) {
+      particleCount = count;
+      particles.positions = new Float32Array(count * 3);
+      particles.velocities = new Float32Array(count * 3);
+      particles.lives = new Float32Array(count);
+      particles.sizes = new Float32Array(count);
+
+      for (let i = 0; i < count; i++) {
+        // Spherical distribution with 4D influence
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = Math.pow(Math.random(), 0.5) * 5;
+        
+        particles.positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        particles.positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        particles.positions[i * 3 + 2] = r * Math.cos(phi);
+        
+        particles.velocities[i * 3] = (Math.random() - 0.5) * 2;
+        particles.velocities[i * 3 + 1] = (Math.random() - 0.5) * 2;
+        particles.velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
+        
+        particles.lives[i] = Math.random();
+        particles.sizes[i] = Math.random() * 3 + 1;
+      }
+    }
+
+    initParticles(particleCount);
+
+    // Create buffers
+    const positionBuffer = gl.createBuffer();
+    const velocityBuffer = gl.createBuffer();
+    const lifeBuffer = gl.createBuffer();
+    const sizeBuffer = gl.createBuffer();
+
+    function updateParticleBuffers() {
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, particles.positions, gl.DYNAMIC_DRAW);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, particles.velocities, gl.DYNAMIC_DRAW);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, particles.lives, gl.DYNAMIC_DRAW);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, particles.sizes, gl.DYNAMIC_DRAW);
+    }
+
+    updateParticleBuffers();
+
+    // Quad for raymarching
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1,
+      -1, 1, 1, -1, 1, 1
+    ]), gl.STATIC_DRAW);
+
+    // Matrix functions
+    function perspective(fov, aspect, near, far) {
+      const f = 1.0 / Math.tan(fov / 2);
+      const nf = 1 / (near - far);
+      return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, 2 * far * near * nf, 0
+      ]);
+    }
+
+    function lookAt(eye, center, up) {
+      const zAxis = normalize3(subtract3(eye, center));
+      const xAxis = normalize3(cross3(up, zAxis));
+      const yAxis = cross3(zAxis, xAxis);
+      
+      return new Float32Array([
+        xAxis[0], yAxis[0], zAxis[0], 0,
+        xAxis[1], yAxis[1], zAxis[1], 0,
+        xAxis[2], yAxis[2], zAxis[2], 0,
+        -dot3(xAxis, eye), -dot3(yAxis, eye), -dot3(zAxis, eye), 1
+      ]);
+    }
+
+    function identity() {
+      return new Float32Array([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      ]);
+    }
+
+    function rotateY(m, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return new Float32Array([
+        c * m[0] + s * m[8], c * m[1] + s * m[9], c * m[2] + s * m[10], c * m[3] + s * m[11],
+        m[4], m[5], m[6], m[7],
+        -s * m[0] + c * m[8], -s * m[1] + c * m[9], -s * m[2] + c * m[10], -s * m[3] + c * m[11],
+        m[12], m[13], m[14], m[15]
+      ]);
+    }
+
+    function subtract3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+    function cross3(a, b) { return [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]]; }
+    function dot3(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+    function normalize3(v) { const l = Math.sqrt(dot3(v, v)); return [v[0]/l, v[1]/l, v[2]/l]; }
+
+    // Performance tracking
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 0;
+    let drawCalls = 0;
+
+    // Get uniform locations
+    const particleUniforms = {
+      projection: gl.getUniformLocation(particleProgram, 'uProjection'),
+      view: gl.getUniformLocation(particleProgram, 'uView'),
+      model: gl.getUniformLocation(particleProgram, 'uModel'),
+      time: gl.getUniformLocation(particleProgram, 'uTime'),
+      intensity: gl.getUniformLocation(particleProgram, 'uIntensity')
+    };
+
+    const raymarchUniforms = {
+      time: gl.getUniformLocation(raymarchProgram, 'uTime'),
+      resolution: gl.getUniformLocation(raymarchProgram, 'uResolution'),
+      intensity: gl.getUniformLocation(raymarchProgram, 'uIntensity'),
+      maxSteps: gl.getUniformLocation(raymarchProgram, 'uMaxSteps')
+    };
+
+    // Get attribute locations
+    const particleAttribs = {
+      position: gl.getAttribLocation(particleProgram, 'aPosition'),
+      velocity: gl.getAttribLocation(particleProgram, 'aVelocity'),
+      life: gl.getAttribLocation(particleProgram, 'aLife'),
+      size: gl.getAttribLocation(particleProgram, 'aSize')
+    };
+
+    const raymarchAttribs = {
+      position: gl.getAttribLocation(raymarchProgram, 'aPosition')
+    };
+
+    // Controls
+    let intensity = 5;
+    let raymarchSteps = 128;
+    let rotSpeed = 5;
+
+    document.getElementById('intensity').addEventListener('input', (e) => {
+      intensity = parseFloat(e.target.value);
+    });
+
+    document.getElementById('particles').addEventListener('input', (e) => {
+      const newCount = parseInt(e.target.value);
+      if (newCount !== particleCount) {
+        initParticles(newCount);
+        updateParticleBuffers();
+      }
+    });
+
+    document.getElementById('raymarchSteps').addEventListener('input', (e) => {
+      raymarchSteps = parseInt(e.target.value);
+    });
+
+    document.getElementById('rotSpeed').addEventListener('input', (e) => {
+      rotSpeed = parseFloat(e.target.value);
+    });
+
+    // Main render loop
+    function render(time) {
+      const t = time * 0.001;
+      drawCalls = 0;
+
+      // Update particles (simulate on CPU for extra stress)
+      for (let i = 0; i < particleCount; i++) {
+        const idx = i * 3;
+        
+        // Update positions with complex 4D-influenced motion
+        particles.positions[idx] += particles.velocities[idx] * 0.01 * intensity;
+        particles.positions[idx + 1] += particles.velocities[idx + 1] * 0.01 * intensity;
+        particles.positions[idx + 2] += particles.velocities[idx + 2] * 0.01 * intensity;
+        
+        // Add 4D rotation influence
+        const x = particles.positions[idx];
+        const y = particles.positions[idx + 1];
+        const z = particles.positions[idx + 2];
+        const w = Math.sin(t * rotSpeed * 0.1 + particles.lives[i] * 6.28);
+        
+        // Project back (simulated 4D behavior)
+        const scale = 1.0 / (2.0 - w * 0.5);
+        particles.velocities[idx] += (x * scale - x) * 0.1;
+        particles.velocities[idx + 1] += (y * scale - y) * 0.1;
+        particles.velocities[idx + 2] += (z * scale - z) * 0.1;
+        
+        // Boundary check with wrap-around
+        for (let j = 0; j < 3; j++) {
+          if (Math.abs(particles.positions[idx + j]) > 10) {
+            particles.positions[idx + j] *= -0.9;
+            particles.velocities[idx + j] *= -0.5;
+          }
+        }
+        
+        // Update life for color cycling
+        particles.lives[i] = (particles.lives[i] + 0.001 * intensity) % 1.0;
+      }
+      
+      updateParticleBuffers();
+
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+      // Render raymarched background
+      gl.useProgram(raymarchProgram);
+      gl.uniform1f(raymarchUniforms.time, t);
+      gl.uniform2f(raymarchUniforms.resolution, canvas.width, canvas.height);
+      gl.uniform1f(raymarchUniforms.intensity, intensity * 0.2);
+      gl.uniform1i(raymarchUniforms.maxSteps, raymarchSteps);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+      gl.enableVertexAttribArray(raymarchAttribs.position);
+      gl.vertexAttribPointer(raymarchAttribs.position, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      drawCalls++;
+
+      // Render particles
+      gl.useProgram(particleProgram);
+      
+      const aspect = canvas.width / canvas.height;
+      const projection = perspective(Math.PI / 4, aspect, 0.1, 100);
+      
+      const camX = Math.sin(t * 0.3 * rotSpeed * 0.1) * 15;
+      const camY = Math.sin(t * 0.2 * rotSpeed * 0.1) * 5 + 5;
+      const camZ = Math.cos(t * 0.3 * rotSpeed * 0.1) * 15;
+      const view = lookAt([camX, camY, camZ], [0, 0, 0], [0, 1, 0]);
+      const model = rotateY(identity(), t * 0.5 * rotSpeed * 0.1);
+
+      gl.uniformMatrix4fv(particleUniforms.projection, false, projection);
+      gl.uniformMatrix4fv(particleUniforms.view, false, view);
+      gl.uniformMatrix4fv(particleUniforms.model, false, model);
+      gl.uniform1f(particleUniforms.time, t);
+      gl.uniform1f(particleUniforms.intensity, intensity * 0.2);
+
+      // Bind particle attributes
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.enableVertexAttribArray(particleAttribs.position);
+      gl.vertexAttribPointer(particleAttribs.position, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
+      gl.enableVertexAttribArray(particleAttribs.velocity);
+      gl.vertexAttribPointer(particleAttribs.velocity, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuffer);
+      gl.enableVertexAttribArray(particleAttribs.life);
+      gl.vertexAttribPointer(particleAttribs.life, 1, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
+      gl.enableVertexAttribArray(particleAttribs.size);
+      gl.vertexAttribPointer(particleAttribs.size, 1, gl.FLOAT, false, 0, 0);
+
+      // Multiple draw calls for extra stress
+      for (let i = 0; i < intensity; i++) {
+        gl.drawArrays(gl.POINTS, 0, particleCount);
+        drawCalls++;
+      }
+
+      // Update stats
+      frameCount++;
+      const currentTime = performance.now();
+      if (currentTime - lastTime >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = currentTime;
+        
+        document.getElementById('fps').textContent = fps;
+        document.getElementById('frameTime').textContent = (1000 / fps).toFixed(2);
+        document.getElementById('particleCount').textContent = particleCount.toLocaleString();
+        document.getElementById('drawCalls').textContent = drawCalls;
+        document.getElementById('triangles').textContent = (particleCount * intensity * 2).toLocaleString();
+        
+        const load = fps < 30 ? 'CRITICAL' : fps < 45 ? 'EXTREME' : fps < 55 ? 'HIGH' : 'MODERATE';
+        document.getElementById('gpuLoad').textContent = load;
+        document.getElementById('gpuLoad').style.color = fps < 30 ? '#f00' : fps < 45 ? '#f80' : '#0f0';
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    });
+
+    // Start rendering
+    requestAnimationFrame(render);
+  </script>
 </body>
 </html>
