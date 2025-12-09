@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Gemini API key tester</title>
+  <title>Gemini API key tester (2.5-ready)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { color-scheme: light dark; }
@@ -24,6 +24,7 @@
     .error { color: #b00020; font-weight: 600; }
     .success { color: #046307; font-weight: 600; }
     footer { margin-top: 12px; font-size: 0.85rem; opacity: 0.8; }
+    .inline { display: flex; gap: 8px; align-items: center; }
   </style>
 </head>
 <body>
@@ -34,20 +35,29 @@
       <div>
         <label for="apiKey">API key</label>
         <input id="apiKey" type="text" placeholder="Paste your Google Gemini API key" />
-        <div class="help">Your key is used client-side for this test only.</div>
+        <div class="help">Client-side only. For production, use a server to keep keys safe.</div>
       </div>
       <div>
         <label for="model">Model</label>
         <select id="model">
+          <!-- 2.5 series -->
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+          <!-- 1.5 fallbacks -->
           <option value="gemini-1.5-flash">gemini-1.5-flash</option>
           <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-          <option value="gemini-1.0-pro">gemini-1.0-pro</option>
         </select>
       </div>
     </div>
 
+    <div class="inline" style="margin-top:8px;">
+      <label for="stream" style="margin:0;">Stream</label>
+      <input id="stream" type="checkbox" />
+      <div class="help">Enable experimental streaming in the browser.</div>
+    </div>
+
     <label for="prompt">Prompt</label>
-    <textarea id="prompt" placeholder="Ask something simple to verify your key (e.g., 'Write a haiku about Wolverhampton')">Write a short haiku about winter mornings.</textarea>
+    <textarea id="prompt" placeholder="Ask something (e.g., 'Write a haiku about Wolverhampton')">Write a short haiku about winter mornings.</textarea>
 
     <div class="row">
       <button id="sendBtn">Send request</button>
@@ -76,29 +86,32 @@
     const statusEl = document.getElementById('status');
     const textOutputEl = document.getElementById('textOutput');
     const jsonOutputEl = document.getElementById('jsonOutput');
+    const streamEl = document.getElementById('stream');
 
     function setStatus(message, kind = 'info') {
       statusEl.textContent = message;
       statusEl.className = kind === 'error' ? 'error' : (kind === 'success' ? 'success' : '');
     }
 
-    function extractTextFromGenerateContent(resp) {
+    // Safely extract plain text from common Gemini response shapes
+    function extractText(resp) {
       try {
+        // v1beta generateContent
         const parts = resp?.candidates?.[0]?.content?.parts || [];
-        const textParts = parts
-          .map(p => {
-            if (typeof p.text === 'string') return p.text;
-            if (p.inline_data?.mime_type && p.inline_data?.data) return `[inline_data: ${p.inline_data.mime_type}]`;
-            return '';
-          })
-          .filter(Boolean);
-        return textParts.join('\n\n').trim() || '(no text in response)';
+        const texts = parts.map(p => (typeof p.text === 'string' ? p.text : '')).filter(Boolean);
+        if (texts.length) return texts.join('\n\n').trim();
+        // Alt shape: candidates[0].output_text (seen in some SDKs)
+        if (typeof resp?.candidates?.[0]?.output_text === 'string') {
+          return resp.candidates[0].output_text.trim();
+        }
+        // Safety net
+        return '(no text in response)';
       } catch {
         return '(unable to parse response)';
       }
     }
 
-    async function callGemini(apiKey, model, userPrompt) {
+    async function callGeminiOnce(apiKey, model, userPrompt) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const body = {
         contents: [
@@ -120,10 +133,54 @@
       return json;
     }
 
+    // Experimental browser streaming using the REST "streamGenerateContent" endpoint
+    async function callGeminiStream(apiKey, model, userPrompt, onChunk) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }]
+      };
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok || !res.body) {
+        const json = await res.json().catch(() => ({}));
+        const msg = json?.error?.message || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      // The streaming response is newline-delimited JSON (NDJSON)
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 1);
+          if (!line) continue;
+          try {
+            const obj = JSON.parse(line); // each line is a partial response
+            onChunk(obj);
+          } catch {
+            // ignore parse errors on partials
+          }
+        }
+      }
+    }
+
     sendBtn.addEventListener('click', async () => {
       const apiKey = apiKeyEl.value.trim();
       const model = modelEl.value.trim();
       const prompt = promptEl.value.trim();
+      const useStream = streamEl.checked;
 
       if (!apiKey) { setStatus('Please paste your API key.', 'error'); return; }
       if (!prompt) { setStatus('Please enter a prompt.', 'error'); return; }
@@ -134,10 +191,28 @@
       jsonOutputEl.textContent = '—';
 
       try {
-        const resp = await callGemini(apiKey, model, prompt);
-        const text = extractTextFromGenerateContent(resp);
-        textOutputEl.textContent = text;
-        jsonOutputEl.textContent = JSON.stringify(resp, null, 2);
+        if (!useStream) {
+          const resp = await callGeminiOnce(apiKey, model, prompt);
+          const text = extractText(resp);
+          textOutputEl.textContent = text;
+          jsonOutputEl.textContent = JSON.stringify(resp, null, 2);
+        } else {
+          let assembledText = '';
+          let lastObj = null;
+          textOutputEl.textContent = '';
+          jsonOutputEl.textContent = '(streaming…)';
+
+          await callGeminiStream(apiKey, model, prompt, (obj) => {
+            lastObj = obj;
+            const partial = extractText(obj);
+            if (partial && partial !== '(no text in response)') {
+              assembledText += (assembledText ? '' : '') + partial;
+              textOutputEl.textContent = assembledText;
+            }
+          });
+
+          jsonOutputEl.textContent = lastObj ? JSON.stringify(lastObj, null, 2) : '(no final JSON captured)';
+        }
         setStatus('Success ✓', 'success');
       } catch (err) {
         setStatus(`Error: ${err.message}`, 'error');
